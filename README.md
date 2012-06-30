@@ -1,4 +1,5 @@
 tclzwave
 ========
 
-tcl bindings for open zwave
+this is a set of tcl bindings for open zwave
+
