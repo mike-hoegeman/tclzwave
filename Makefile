@@ -96,12 +96,12 @@ all: ozwsh
 lib:
 	$(MAKE) -C $(OZW)/cpp/build/mac
 
-OBJS = ozwsh.o ozwbindings.o
+OBJS = ozwsh.o ozwbindings.o ozw_options.o
 ozwsh:	$(OBJS) lib
 	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) -framework IOKit -framework CoreFoundation -o ozwsh
 
 clean:
-	rm -f ozwsh  ozwsh.o ozwbindings.o
+	rm -f ozwsh $(OBJS) 
 
 XMLLINT := $(shell whereis xmllint)
 
