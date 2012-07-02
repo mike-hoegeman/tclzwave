@@ -7,6 +7,7 @@
 .SUFFIXES:	.c .cpp .o .a
 
 CC     := gcc
+CXX    := g++
 LD     := gcc
 AR     := ar rc
 RANLIB := ranlib
@@ -87,16 +88,20 @@ LIBS = $(wildcard $(OZW)/lib/mac/*.a) $(TCL_LIBS)
 %.o : %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
 
+%.o : %.cpp
+	$(CXX) $(CFLAGS) $(INCLUDES) -o $@ $<
+
 all: ozwsh
 
 lib:
 	$(MAKE) -C $(OZW)/cpp/build/mac
 
-ozwsh:	ozwsh.o lib
-	$(LD) $(LDFLAGS) $< $(LIBS) -framework IOKit -framework CoreFoundation -o ozwsh
+OBJS = ozwsh.o ozwbindings.o
+ozwsh:	$(OBJS) lib
+	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) -framework IOKit -framework CoreFoundation -o ozwsh
 
 clean:
-	rm -f ozwsh  ozwsh.o
+	rm -f ozwsh  ozwsh.o ozwbindings.o
 
 XMLLINT := $(shell whereis xmllint)
 
