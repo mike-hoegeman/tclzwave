@@ -8,7 +8,7 @@
 
 CC     := gcc
 CXX    := g++
-LD     := gcc
+LD     := g++
 AR     := ar rc
 RANLIB := ranlib
 
@@ -75,15 +75,15 @@ CFLAGS	:= -c -DDARWIN $(DEBUG_CFLAGS) $(TCL_CFLAGS)
 LDFLAGS	:= $(DEBUG_LDFLAGS) $(TCL_LDFLAGS)
 
 INCLUDES := \
- -I $(OZW)/src \
- -I $(OZW)/src/command_classes/ \
- -I $(OZW)/src/value_classes/ \
- -I $(OZW)/src/platform/ \
- -I $(OZW)/h/platform/unix \
- -I $(OZW)/tinyxml/ \
- -I $(OZW)/hidapi/hidapi/
+ -I $(OZW)/cpp/src \
+ -I $(OZW)/cpp/src/command_classes/ \
+ -I $(OZW)/cpp/src/value_classes/ \
+ -I $(OZW)/cpp/src/platform/ \
+ -I $(OZW)/cpp/h/platform/unix \
+ -I $(OZW)/cpp/tinyxml/ \
+ -I $(OZW)/cpp/hidapi/hidapi/
 
-LIBS = $(wildcard $(OZW)/lib/mac/*.a) $(TCL_LIBS)
+LIBS = $(OZW)/cpp/lib/mac/libopenzwave.a $(TCL_LIBS)
 
 %.o : %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $<
@@ -96,9 +96,10 @@ all: ozwsh
 lib:
 	$(MAKE) -C $(OZW)/cpp/build/mac
 
-OBJS = ozwsh.o ozwbindings.o ozw_options.o
+OBJS = ozwsh.o init.o options.o
 ozwsh:	$(OBJS) lib
-	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) -framework IOKit -framework CoreFoundation -o ozwsh
+	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) \
+          -framework IOKit -framework CoreFoundation -o ozwsh
 
 clean:
 	rm -f ozwsh $(OBJS) 
