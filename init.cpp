@@ -22,10 +22,9 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     );
 
     extern int OzwOptions_Init(Tcl_Interp *interp);
-    if (OzwOptions_Init(interp) == NULL) {
+    if (OzwOptions_Init(interp) != TCL_OK) {
         return TCL_ERROR;
     }
-
     return Tcl_PkgProvide(interp, "ozw", "0.1");
 }
 

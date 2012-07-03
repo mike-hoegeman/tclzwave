@@ -1,0 +1,19 @@
+package require tcltest 2.0
+namespace import ::tcltest::*
+
+configure -verbose ptbe
+
+test options-3 {
+    call options with not enough arguments
+} -body {
+    ozw::options
+} -returnCodes error -match glob -result \
+    {*wrong # args: should be "ozw::options create|configure|lock ?arg ...?"*}
+
+test options-4 {
+    call options create with bad -option
+} -body {
+    ozw::options create -foo bar
+} -returnCodes error -match glob -result \
+    {illegal *create option "-foo"}
+

@@ -77,18 +77,18 @@ static int OzwOptionsObjCmd(
             /* 
              * process option value pair
              */
-            if (strcmp(opt, "-configurationpath")) {
+            if (!strcmp(opt, "-configurationpath")) {
                 configurationpath = v; 
             }
-            else if (strcmp(opt, "-userpath")) {
+            else if (!strcmp(opt, "-userpath")) {
                 userpath = v;
             }
-            else if (strcmp(opt, "-commandline")) {
+            else if (!strcmp(opt, "-commandline")) {
                 commandline = v;
             }
             else {
                 Tcl_AppendResult(interp, 
-                    "illegal create option \"" , opt, "\"", NULL);
+                    "illegal options create option \"" , opt, "\"", NULL);
                 return TCL_ERROR;
             }
             created = 1;
@@ -96,8 +96,12 @@ static int OzwOptionsObjCmd(
 
         OpenZWave::Options::Create( "../../../../config/", "", "" );
 
+
+        Tcl_AppendResult(interp, "ok", NULL);
+        return TCL_OK;
+
     } else {
-        Tcl_AppendResult(interp, "illegal subcommand \"", subcommand, "\"", NULL);
+        Tcl_AppendResult(interp, "illegal options subcommand \"", subcommand, "\"", NULL);
         return TCL_ERROR;
     }
 
@@ -112,17 +116,15 @@ static int OzwOptionsObjCmd(
 
 }
 
-DLLEXPORT int OzwOptions_Init(Tcl_Interp *interp) {
-    if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
-        return TCL_ERROR;
-    }
+int OzwOptions_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, 
         "::ozw::options", 
         OzwOptionsObjCmd, 
         (ClientData) NULL, 
         NULL);
+    return TCL_OK;
 }
 
-DLLEXPORT int OzwOptions_SafeInit(Tcl_Interp *interp) {
+int OzwOptions_SafeInit(Tcl_Interp *interp) {
     return OzwOptions_Init(interp);
 }

@@ -96,6 +96,8 @@ all: ozwsh
 lib:
 	$(MAKE) -C $(OZW)/cpp/build/mac
 
+$(OBJS): ozw.h
+
 OBJS = ozwsh.o init.o options.o
 ozwsh:	$(OBJS) lib
 	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) \
