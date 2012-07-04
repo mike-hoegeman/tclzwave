@@ -8,7 +8,7 @@ test options-3 {
 } -body {
     ozw::options
 } -returnCodes error -match glob -result \
-    {*wrong # args: should be "ozw::options create|configure|lock ?arg ...?"*}
+    {*wrong # args: should be "ozw::options create|configure|lock* ?arg ...?"*}
 
 test options-4 {
     call options create with bad -option
@@ -17,3 +17,187 @@ test options-4 {
 } -returnCodes error -match glob -result \
     {illegal *create option "-foo"}
 
+test options-5 {
+    call options create with missing value in a -option value
+} -body {
+    ozw::options create -userpath
+} -returnCodes error -match glob -result \
+    {missing value for option "-userpath"}
+
+test options-6 {
+    call options create with proper args
+} -body {
+    ozw::options create -userpath "./"
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-7 {
+    call options create when it's already been called
+} -body {
+    ozw::options create -userpath "./"
+} -returnCodes error -match glob -result \
+    {Options element already exists}
+
+test options-8 {
+    call destroy w/ too many args
+} -body {
+    ozw::options destroy -foo bar
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options destroy"}
+
+test options-9 {
+    call destroy correctly
+} -body {
+    ozw::options destroy
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-10 {
+    call create and destroy a bunch of times
+} -body {
+    for {set x 0} {$x < 10000} {incr x} {
+        ozw::options create -userpath . -commandline ""
+        ozw::options destroy
+        if {($x % 1000) == 0} {puts -nonewline stderr $x..}
+    }
+    ozw::options create -userpath . -commandline ""
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-11 {
+   call arelocked w/ wronag number of args
+} -body {
+    ozw::options arelocked -a b
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options arelocked"}
+
+test options-12 {
+   call arelocked
+} -body {
+    ozw::options arelocked
+} -returnCodes ok -match glob -result \
+    {0}
+
+test options-13 {
+   call lock w/ wrong nunmber of args
+} -body {
+    ozw::options lock -foo baralicious
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options lock"}
+
+test options-14 {
+   call lock 
+} -body {
+    ozw::options lock
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-15 {
+   call arelocked it should be locked now
+} -body {
+    ozw::options arelocked
+} -returnCodes ok -match glob -result \
+    {1}
+
+test options-16 {
+   legal addoptionbool command - but options are locked
+} -body {
+    ozw::options addoptionbool bullwinkle true
+} -returnCodes error -match glob -result \
+    {Cannot add to locked options}
+
+test options-17 {
+    illegal addoptionxxx command
+} -body {
+    ozw::options destroy 
+    ozw::options create -userpath "./" -commandline "" 
+    ozw::options addoptionfoo "a" b
+} -returnCodes error -match glob -result \
+    {illegal options (add) subcommand "addoptionfoo"}
+
+test options-18 {
+   illegal addoptionbool command - bad type for value
+} -body {
+    ozw::options addoptionbool "a" foo
+} -returnCodes error -match glob -result \
+    {expected boolean value but got "foo"}
+
+test options-19 {
+   legal addoptionbool command not enough args
+} -body {
+    ozw::options addoptionbool 
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options addoptionbool name defaultvalue"}
+
+test options-20 {
+   legal addoptionbool command - options not locked
+} -body {
+    foreach val {0 1 true false yes no} {
+        ozw::options addoptionbool bullwinkle $val
+    }
+    format OTAY!
+} -returnCodes ok -match glob -result \
+    {OTAY!}
+
+test options-21 {
+   illegal addoptionint command - bad type for value
+} -body {
+    ozw::options addoptionint funkyint 99.9
+} -returnCodes error -match glob -result \
+    {expected integer but got "99.9"}
+
+test options-22 {
+   illegal addoptionint command - bad type for value
+} -body {
+    ozw::options addoptionint funkyint foo
+} -returnCodes error -match glob -result \
+    {expected integer but got "foo"}
+
+test options-23 {
+   illegal addoptionint command - ok hex type for value
+} -body {
+    ozw::options addoptionint legalint 0xdead
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-24 {
+   illegal addoptionint command - ok type for value
+} -body {
+    ozw::options addoptionint legalint 99999
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-25 {
+   illegal addoptionstring command - wrongs number of args
+} -body {
+    ozw::options addoptionstring funkystring
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options addoptionstring name defaultvalue appendmode"}
+
+test options-26 {
+   illegal addoptionstring command - wrongs number of args -- toomany
+} -body {
+    ozw::options addoptionstring funkystring "foo" true zabazz
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options addoptionstring name defaultvalue appendmode"}
+
+test options-27 {
+   illegal addoptionstring command - bad appendmode value
+} -body {
+    ozw::options addoptionstring funkystring "foo" figgle-true
+} -returnCodes error -match glob -result \
+    {expected boolean value but got "figgle-true" (for appendmode parameter)}
+
+test options-28 {
+   legal addoptionstring command
+} -body {
+    ozw::options addoptionstring funkadelic "George Clinton" false
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-29 {
+   legal addoptionstring command
+} -body {
+    ozw::options addoptionstring funkadelic "Bootsy Collins" true
+} -returnCodes ok -match glob -result \
+    {}

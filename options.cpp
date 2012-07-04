@@ -18,7 +18,7 @@ static int OzwOptionsInstObjCmd(
 }
 #endif
 
-static int created = 0;
+static OpenZWave::Options *Ozw_OptionsSingleton = NULL;
 
 static int OzwOptionsObjCmd(
     ClientData clientData, 
@@ -33,7 +33,7 @@ static int OzwOptionsObjCmd(
 #endif
 
     if (objc < 2) {
-        Tcl_WrongNumArgs(interp, 1, objv, "create|configure|lock ?arg ...?");
+        Tcl_WrongNumArgs(interp, 1, objv, "create|configure|lock|destroy ?arg ...?");
         return TCL_ERROR;
     }
 
@@ -51,8 +51,7 @@ static int OzwOptionsObjCmd(
 
         int idx = -1;
 
-
-        if (created != 0) {
+        if (Ozw_OptionsSingleton != NULL) {
             Tcl_AppendResult(interp, "Options element already exists", NULL);
             return TCL_ERROR;
         } 
@@ -91,17 +90,160 @@ static int OzwOptionsObjCmd(
                     "illegal options create option \"" , opt, "\"", NULL);
                 return TCL_ERROR;
             }
-            created = 1;
         }
 
-        OpenZWave::Options::Create( "../../../../config/", "", "" );
-
-
-        Tcl_AppendResult(interp, "ok", NULL);
+        Ozw_OptionsSingleton = OpenZWave::Options::Create(
+            configurationpath, userpath, commandline
+        );
+        if (Ozw_OptionsSingleton == NULL) {
+            Tcl_AppendResult(interp, "error creating Options object", NULL);
+        }
         return TCL_OK;
 
+    } else if (!strcmp(subcommand, "arelocked")) {
+
+        if (objc != 2) {
+            Tcl_WrongNumArgs(interp, 1, objv, "arelocked");
+            return TCL_ERROR;
+        }
+        if (OpenZWave::Options::Get() == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL);
+            return TCL_ERROR;
+        }
+        const char *result = OpenZWave::Options::Get()->AreLocked() ? "1" : "0";
+        Tcl_SetResult(interp, (char *)result, NULL);
+        return TCL_OK;
+
+    } else if (!strcmp(subcommand, "lock")) {
+        if (objc != 2) {
+            Tcl_WrongNumArgs(interp, 1, objv, "lock");
+            return TCL_ERROR;
+        }
+        if (OpenZWave::Options::Get() == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL);
+            return TCL_ERROR;
+        }
+        bool ok = OpenZWave::Options::Get()->Lock();
+        if (!ok) {
+            Tcl_AppendResult(interp, 
+                "Cannot lock options element", NULL);
+            return TCL_ERROR;
+        }
+        return TCL_OK;
+
+    } else if (!strcmp(subcommand, "destroy")) {
+        if (objc != 2) {
+            Tcl_WrongNumArgs(interp, 1, objv, "destroy");
+            return TCL_ERROR;
+        }
+        /* shouldn't be done until associated manager Object is destroyed  */
+        /* need a check in maybe to make sure manager is gone */
+        if (OpenZWave::Options::Destroy() == true) {
+            Ozw_OptionsSingleton = NULL;
+            return TCL_OK;
+        } else {
+            /* not entirely obvious what to do if this happens */
+            Ozw_OptionsSingleton = NULL;
+            Tcl_AppendResult(interp, "error destroying Options object", NULL);
+            return TCL_ERROR;
+        }
+
+    } else if (!strncmp(subcommand, "addoption", 9)) {
+
+        int idx = 2;
+        const char *nm = Tcl_GetString(objv[idx]);
+
+        OpenZWave::Options *o = OpenZWave::Options::Get();
+        if (o == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL);
+            return TCL_ERROR;
+        }
+
+        if (o->AreLocked()) {
+            Tcl_AppendResult(interp, "Cannot add to locked options", NULL);
+            return TCL_ERROR;
+        }
+
+        bool add_res = false;
+        int tcl_res = TCL_ERROR;
+
+        /* */
+        if (!strcmp(subcommand, "addoptionbool")) {
+            if (objc != 4) {
+                Tcl_WrongNumArgs(interp, 2, objv, "name defaultvalue");
+                return TCL_ERROR;
+            }
+            int tcl_bool = -1;
+            tcl_res = Tcl_GetBooleanFromObj(interp, objv[idx+1], &tcl_bool);
+            if (tcl_res != TCL_OK) {
+                return TCL_ERROR;
+            }
+            add_res = o->AddOptionBool(nm, tcl_bool != 0 ? true : false);
+            if (add_res == false) {
+                const char *def = Tcl_GetString(objv[idx+1]);
+                Tcl_AppendResult(interp, 
+                    "cannot add \"", nm, "\" (", def!=NULL ? def : "???", ")");
+                return TCL_ERROR;
+            }
+            return TCL_OK;
+
+        } else if (!strcmp(subcommand, "addoptionint")) {
+            if (objc != 4) {
+                Tcl_WrongNumArgs(interp, 2, objv, "name defaultvalue");
+                return TCL_ERROR;
+            }
+            int int_arg = -1;
+            tcl_res = Tcl_GetIntFromObj(interp, objv[idx+1], &int_arg);
+            if (tcl_res != TCL_OK) {
+                return TCL_ERROR;
+            }
+            add_res = o->AddOptionBool(nm, int_arg != 0 ? true : false);
+            if (add_res == false) {
+                const char *def = Tcl_GetString(objv[idx+1]);
+                Tcl_AppendResult(interp, 
+                    "cannot add \"", nm, "\" (", def!=NULL ? def : "???", ")");
+                return TCL_ERROR;
+            }
+            return TCL_OK;
+
+        } else if (!strcmp(subcommand, "addoptionstring")) {
+            if (objc != 5) {
+                Tcl_WrongNumArgs(
+                    interp, 2, objv, "name defaultvalue appendmode");
+                return TCL_ERROR;
+            }
+            int appendmode = -1;
+            tcl_res = Tcl_GetBooleanFromObj(interp, objv[4], &appendmode);
+            if (tcl_res != TCL_OK) {
+                Tcl_AppendResult(interp, " (for appendmode parameter)", NULL);
+                return TCL_ERROR;
+            }
+            const char *val = Tcl_GetString(objv[3]);
+            add_res = o->AddOptionString(
+                nm, val, appendmode != 0 ? true : false);
+            if (add_res == false) {
+                const char *def = Tcl_GetString(objv[idx+1]);
+                Tcl_AppendResult(interp, 
+                    "cannot add \"", nm, "\" (", def!=NULL ? def : "???", ")");
+                return TCL_ERROR;
+            }
+            return TCL_OK;
+
+        } else {
+            Tcl_ResetResult(interp);
+            Tcl_AppendResult(interp, 
+                "illegal options (add) subcommand \"", subcommand, "\"", NULL);
+            return TCL_ERROR;
+        }
+
+
+
     } else {
-        Tcl_AppendResult(interp, "illegal options subcommand \"", subcommand, "\"", NULL);
+        Tcl_AppendResult(interp, 
+            "illegal options subcommand \"", subcommand, "\"", NULL);
         return TCL_ERROR;
     }
 

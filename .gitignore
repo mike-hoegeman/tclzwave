@@ -11,4 +11,7 @@
 *.la
 *.a
 
+# vi buffer files
+*.swp
+
 ozwsh
