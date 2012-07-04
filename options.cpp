@@ -217,9 +217,6 @@ static int OzwOptionsObjCmd(
             }
             int appendmode = -1;
             tcl_res = Tcl_GetBooleanFromObj(interp, objv[4], &appendmode);
-            printf("appendmode = %d\n", appendmode);
-            printf("-----------\n");
-            fflush(stdout);
             if (tcl_res != TCL_OK) {
                 Tcl_AppendResult(interp, " (for appendmode parameter)", NULL);
                 return TCL_ERROR;

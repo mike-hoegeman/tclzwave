@@ -8,8 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "Options.h"
-
-//#include "Manager.h"
+#include "Manager.h"
 //#include "Driver.h"
 //#include "Node.h"
 //#include "Group.h"

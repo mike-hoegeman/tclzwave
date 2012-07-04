@@ -290,3 +290,60 @@ test options-40 {
     ozw::options getoptionasbool legalbool
 } -returnCodes ok -match glob -result \
 {0}
+
+test manager-1 {
+   bogus manager command
+} -body {
+    ozw::manager foobalicious
+} -returnCodes error -match glob -result \
+{illegal manager subcommand "foobalicious"}
+
+test manager-2 {
+   manager destroy where there is nothing to destroy
+} -body {
+    ozw::manager destroy
+} -returnCodes error -match glob -result \
+{manager does not exist}
+
+test manager-3 {
+   manager create foo
+} -body {
+    ozw::manager create foo
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::manager create"}
+
+test manager-4 {
+   manager create - using unlocked options
+} -body {
+    ozw::manager create
+} -returnCodes error -match glob -result \
+{options element is not locked. it needs to be locked to create a manager}
+
+test manager-5 {
+   manager create - should work
+} -body {
+    ozw::options lock
+    ozw::manager create
+} -returnCodes ok -match glob -result \
+{}
+
+test manager-6 {
+   manager create - already created
+} -body {
+    ozw::manager create
+} -returnCodes error -match glob -result \
+{manager already exists}
+
+test manager-7 {
+   manager destroy
+} -body {
+    ozw::manager destroy
+} -returnCodes ok -match glob -result \
+{}
+
+test manager-8 {
+   manager destroy - already destroyed
+} -body {
+    ozw::manager destroy
+} -returnCodes error -match glob -result \
+{manager does not exist}
