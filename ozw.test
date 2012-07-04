@@ -133,7 +133,7 @@ test options-20 {
    legal addoptionbool command - options not locked
 } -body {
     foreach val {0 1 true false yes no} {
-        ozw::options addoptionbool bullwinkle $val
+        ozw::options addoptionbool legalbool $val
     }
     format OTAY!
 } -returnCodes ok -match glob -result \
@@ -191,7 +191,7 @@ test options-27 {
 test options-28 {
    legal addoptionstring command
 } -body {
-    ozw::options addoptionstring funkadelic "George Clinton" false
+    ozw::options addoptionstring funkadelic "George Clinton" true
 } -returnCodes ok -match glob -result \
     {}
 
@@ -199,5 +199,94 @@ test options-29 {
    legal addoptionstring command
 } -body {
     ozw::options addoptionstring funkadelic "Bootsy Collins" true
+    ozw::options addoptionstring funkadelic "BucketHead" true
 } -returnCodes ok -match glob -result \
     {}
+
+test options-29 {
+   legal addoptionstring command
+} -body {
+    ozw::options addoptionstring funkadelic "Bootsy Collins" false
+    ozw::options addoptionstring funkadelic "Bootsy Collins" false
+} -returnCodes ok -match glob -result \
+    {}
+
+test options-30 {
+   getoptiontype command - wrong number of args
+} -body {
+    ozw::options getoptiontype
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options getoptiontype name"}
+
+test options-31 {
+   getoptiontype command - wrong number of args
+} -body {
+    ozw::options getoptiontype funkadelic wazz
+} -returnCodes error -match glob -result \
+    {wrong # args: should be "ozw::options getoptiontype name"}
+
+test options-32 {
+   getoptiontype command
+} -body {
+    set l {}
+    lappend l [ozw::options getoptiontype funkadelic]
+    lappend l [ozw::options getoptiontype legalint]
+    lappend l [ozw::options getoptiontype legalbool]
+} -returnCodes ok -match glob -result \
+    {string int bool}
+
+test options-33 {
+   getoptiontype command
+} -body {
+    ozw::options getoptiontype doesnotexist
+} -returnCodes error -match glob -result \
+    {Cannot find option "doesnotexist"}
+
+test options-34 {
+   getoptionasint command - undefined name
+} -body {
+    ozw::options getoptionasint
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::options getoptionasint name"}
+
+test options-35 {
+   getoptionasint command - undefined name
+} -body {
+    ozw::options getoptionasint fooint
+} -returnCodes error -match glob -result \
+{Cannot get int option "fooint"}
+
+test options-36 {
+   getoptionasint command
+} -body {
+    ozw::options getoptionasint legalint
+} -returnCodes ok -match glob -result \
+{99999}
+
+test options-37 {
+   getoptionasint command - try to get a bool via int itnerface
+} -body {
+    ozw::options getoptionasint legalbool
+} -returnCodes error -match glob -result \
+{Cannot get int option*} 
+
+test options-38 {
+   getoptionasstring command
+} -body {
+    ozw::options getoptionasstring funkadelic
+} -returnCodes ok -match glob -result \
+{}
+
+test options-39 {
+   getoptionasbool command - with wrong type option
+} -body {
+    ozw::options getoptionasbool legalint
+} -returnCodes error -match glob -result \
+{Cannot get bool option "legalint"*}
+
+test options-40 {
+   getoptionasbool command
+} -body {
+    ozw::options getoptionasbool legalbool
+} -returnCodes ok -match glob -result \
+{0}

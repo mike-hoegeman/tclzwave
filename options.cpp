@@ -200,7 +200,7 @@ static int OzwOptionsObjCmd(
             if (tcl_res != TCL_OK) {
                 return TCL_ERROR;
             }
-            add_res = o->AddOptionBool(nm, int_arg != 0 ? true : false);
+            add_res = o->AddOptionInt(nm, int_arg);
             if (add_res == false) {
                 const char *def = Tcl_GetString(objv[idx+1]);
                 Tcl_AppendResult(interp, 
@@ -217,6 +217,9 @@ static int OzwOptionsObjCmd(
             }
             int appendmode = -1;
             tcl_res = Tcl_GetBooleanFromObj(interp, objv[4], &appendmode);
+            printf("appendmode = %d\n", appendmode);
+            printf("-----------\n");
+            fflush(stdout);
             if (tcl_res != TCL_OK) {
                 Tcl_AppendResult(interp, " (for appendmode parameter)", NULL);
                 return TCL_ERROR;
@@ -233,6 +236,7 @@ static int OzwOptionsObjCmd(
             return TCL_OK;
 
         } else {
+
             Tcl_ResetResult(interp);
             Tcl_AppendResult(interp, 
                 "illegal options (add) subcommand \"", subcommand, "\"", NULL);
@@ -240,6 +244,95 @@ static int OzwOptionsObjCmd(
         }
 
 
+    } else if (!strcmp(subcommand, "getoptiontype")) {
+        if (objc != 3) {
+            Tcl_WrongNumArgs(interp, 2, objv, "name");
+            return TCL_ERROR;
+        }
+        const char *nm = Tcl_GetString(objv[2]);
+        OpenZWave::Options *o = OpenZWave::Options::Get();
+        if (o == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL); return TCL_ERROR;
+        }
+        OpenZWave::Options::OptionType ot = o->GetOptionType(nm);
+        const char *otype_tcl = "";
+        if (ot == OpenZWave::Options::OptionType_Bool) {
+            otype_tcl = "bool";
+        } else if (ot == OpenZWave::Options::OptionType_Int) {
+            otype_tcl = "int";
+        } else if (ot == OpenZWave::Options::OptionType_String) {
+            otype_tcl = "string";
+        } else if (ot == OpenZWave::Options::OptionType_Invalid) {
+            Tcl_AppendResult(interp, 
+                "Cannot find option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        } else {
+            Tcl_AppendResult(interp, 
+                "Uknown type for option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        }
+        Tcl_AppendResult(interp, otype_tcl, NULL);
+        return TCL_OK;
+
+    } else if (!strcmp(subcommand, "getoptionasbool")) {
+        if (objc != 3) {
+            Tcl_WrongNumArgs(interp, 2, objv, "name"); return TCL_ERROR;
+        }
+        OpenZWave::Options *o = OpenZWave::Options::Get();
+        if (o == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL); return TCL_ERROR;
+        }
+        const char *nm = Tcl_GetString(objv[2]); bool val;
+        if (o->GetOptionAsBool(nm, &val) == false) {
+            Tcl_AppendResult(interp, 
+                "Cannot get bool option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        }
+        if (o->GetOptionAsBool(nm, &val) == false) {
+            Tcl_AppendResult(interp, 
+                "Cannot get int option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        }
+        Tcl_SetObjResult(interp, Tcl_NewIntObj(val == true ? 1 : 0));
+        return TCL_OK;
+
+    } else if (!strcmp(subcommand, "getoptionasint")) {
+        if (objc != 3) {
+            Tcl_WrongNumArgs(interp, 2, objv, "name"); return TCL_ERROR;
+        }
+        const char *nm = Tcl_GetString(objv[2]); int val = -1;
+        OpenZWave::Options *o = OpenZWave::Options::Get();
+        if (o == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL); return TCL_ERROR;
+        }
+        if (o->GetOptionAsInt(nm, &val) == false) {
+            Tcl_AppendResult(interp, 
+                "Cannot get int option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        }
+        Tcl_SetObjResult(interp, Tcl_NewIntObj(val));
+        return TCL_OK;
+
+    } else if (!strcmp(subcommand, "getoptionasstring")) {
+        if (objc != 3) {
+            Tcl_WrongNumArgs(interp, 2, objv, "name"); return TCL_ERROR;
+        }
+        const char *nm = Tcl_GetString(objv[2]); string val = "";
+        OpenZWave::Options *o = OpenZWave::Options::Get();
+        if (o == NULL) {
+            Tcl_AppendResult(interp, 
+                "Cannot find options element", NULL); return TCL_ERROR;
+        }
+        if (o->GetOptionAsString(nm, &val) == false) {
+            Tcl_AppendResult(interp, 
+                "Cannot get string option \"", nm, "\"", NULL);
+            return TCL_ERROR;
+        }
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(val.c_str(), -1));
+        return TCL_OK;
 
     } else {
         Tcl_AppendResult(interp, 
