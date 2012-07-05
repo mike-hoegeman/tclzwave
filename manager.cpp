@@ -140,11 +140,11 @@ static int OzwManagerObjCmd(
             return TCL_ERROR;
         }
         const char *path = NULL;
-        if (objc < 2) {
+        if (objc != 3) {
             Tcl_WrongNumArgs(interp, 1, objv, "adddriver /port/path|usb");
             return TCL_ERROR;
         }
-        path = Tcl_GetString(objv[1]);
+        path = Tcl_GetString(objv[2]);
         if (path == NULL) {
             Tcl_SetObjResult(interp, 
                 Tcl_NewStringObj("error getting path", -1));

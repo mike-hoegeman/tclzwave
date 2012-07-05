@@ -403,3 +403,41 @@ test manager-16 {
         ozw::manager addwatcher -command {puts stderr "YOW!"}
 } -returnCodes error -match glob -result \
 {there is already a watcher installed}
+
+test manager-17 {
+    manager adddriver
+} -body {
+        ozw::manager adddriver
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::manager adddriver /port/path|usb"}
+test manager-18 {
+    manager adddriver -- too many args
+} -body {
+        ozw::manager adddriver /foo/bar bullwinkle
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::manager adddriver /port/path|usb"}
+test manager-19 {
+    legal manager adddriver call to usb
+} -body {
+        ozw::manager adddriver usb
+} -returnCodes ok -match glob -result \
+{}
+
+test manager-20 {
+    manager removedriver
+} -body {
+        ozw::manager adddriver
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::manager removedriver /port/path|usb"}
+test manager-21 {
+    manager adddriver -- too many args
+} -body {
+        ozw::manager removedriver /foo/bar bullwinkle
+} -returnCodes error -match glob -result \
+{wrong # args: should be "ozw::manager removedriver /port/path|usb"}
+test manager-22 {
+    legal manager removedriver call to usb
+} -body {
+        ozw::manager removedriver usb
+} -returnCodes ok -match glob -result \
+{}
