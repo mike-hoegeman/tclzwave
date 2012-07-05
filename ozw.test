@@ -3,6 +3,8 @@ namespace import ::tcltest::*
 
 configure -verbose ptbe
 
+set STRESS_REPS 1
+
 test options-3 {
     call options with not enough arguments
 } -body {
@@ -55,7 +57,7 @@ test options-9 {
 test options-10 {
     call create and destroy a bunch of times
 } -body {
-    for {set x 0} {$x < 10000} {incr x} {
+    for {set x 0} {$x < $STRESS_REPS} {incr x} {
         ozw::options create -userpath . -commandline ""
         ozw::options destroy
         if {($x % 1000) == 0} {puts -nonewline stderr $x..}
@@ -347,3 +349,57 @@ test manager-8 {
     ozw::manager destroy
 } -returnCodes error -match glob -result \
 {manager does not exist}
+
+test manager-9 {
+   stress - manager create / destroy a bunch of times
+} -body {
+    for {set x 0} {$x < $STRESS_REPS} {incr x} {
+        ozw::manager create
+        ozw::manager destroy
+        if {($x % 1000) == 0} {puts -nonewline stderr $x..}
+    }
+    ozw::manager create
+} -returnCodes ok -match glob -result \
+{}
+
+test manager-10 {
+    manager removewatcher when no add has been done
+} -body {
+        ozw::manager removewatcher
+} -returnCodes error -match glob -result \
+{no watcher currently installed}
+
+test manager-11 {
+    manager add watcher
+} -body {
+        ozw::manager addwatcher
+} -returnCodes error -match glob -result \
+{missing -command option. -command {...} is a required option pair}
+
+test manager-12 {
+    manager addwatcher - with bogus option pair
+} -body {
+        ozw::manager addwatcher -bullwinkle moose
+} -returnCodes error -match glob -result \
+{illegal option "-bullwinkle"}
+
+test manager-13 {
+    manager addwatcher - missing value in option pair
+} -body {
+        ozw::manager addwatcher -command
+} -returnCodes error -match glob -result \
+{missing value for option "-command"}
+
+test manager-14 {
+    manager addwatcher
+} -body {
+        ozw::manager addwatcher -command {puts stderr "YOW!"}
+} -returnCodes ok -match glob -result \
+{}
+
+test manager-16 {
+    manager addwatcher - w/ watcher already in place.
+} -body {
+        ozw::manager addwatcher -command {puts stderr "YOW!"}
+} -returnCodes error -match glob -result \
+{there is already a watcher installed}
