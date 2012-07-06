@@ -34,6 +34,7 @@ void Ozw_Watcher (
     ncd->watcherContextPtr = ctxt;
     ncd->notificationPtr = _notification;
 
+    fprintf(stderr, "xxx");
     Ozw_CreateNotificationInst(ncd);
     return;
 }

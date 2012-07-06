@@ -27,18 +27,42 @@ static int Ozw_NotificationInstCmd(
 int Ozw_CreateNotificationInst(
     Ozw_NotificationClientData *ncd
 ) {
-    char command_name[200]; 
-    sprintf(command_name, "::ozw::inst::notification%lx", 
+    char inst_name[200]; 
+    int eval_result = TCL_ERROR;
+    sprintf(inst_name, "::ozw::inst::notification%lx", 
         Ozw_NotificationInstNo++); 
-    Tcl_CreateObjCommand(
+    Tcl_Command command_token = Tcl_CreateObjCommand(
         ncd->watcherContextPtr->interp, 
-        command_name, 
+        inst_name, 
         Ozw_NotificationInstCmd,
         (ClientData)ncd, 
         Ozw_NotificationInstDelProc
     );
-    Tcl_SetObjResult(
-        ncd->watcherContextPtr->interp, 
-        Tcl_NewStringObj(command_name, -1));
+    {
+        Tcl_DString ds;
+        Tcl_DStringInit(&ds);
+        Tcl_DStringAppend(
+            &ds, Tcl_DStringValue(&(ncd->watcherContextPtr->command)), -1
+        );
+        Tcl_DStringAppendElement(&ds, inst_name);
+        eval_result = Tcl_EvalEx(
+            ncd->watcherContextPtr->interp, 
+            Tcl_DStringValue(&ds), -1, 
+            TCL_EVAL_GLOBAL
+        );
+        Tcl_DStringGetResult(ncd->watcherContextPtr->interp, &ds);
+        if (eval_result != TCL_OK) {
+            fprintf(stderr, 
+                "Error running notification callback: %s\n----\n", 
+                Tcl_DStringValue(&ds));
+        }
+        if (Tcl_DeleteCommandFromToken(
+            ncd->watcherContextPtr->interp,
+            command_token) != TCL_OK) {
+            fprintf(stderr, "error deleting notification instance"); 
+        }
+        Tcl_DStringFree(&ds);
+    }
+
     return TCL_OK;
 }
