@@ -6,6 +6,19 @@ configure -verbose ptbe
 set STRESS_REPS 1
 set DEVICE /dev/cu.SLAB_USBtoUART
 
+test init-1 {
+    there should be a couple of arrays for Notification Type mapping
+} -body {
+        array get ::ozw::notification::TypeStrings
+} -returnCodes ok -match glob -result \
+    {*25 Type_Error*}
+test init-2 {
+    there should be a couple of arrays for Notification Type mapping
+} -body {
+        array get ::ozw::notification::TypeCodes
+} -returnCodes ok -match glob -result \
+    {*Type_Error 25*}
+
 test options-3 {
     call options with not enough arguments
 } -body {
@@ -391,10 +404,15 @@ test manager-13 {
 } -returnCodes error -match glob -result \
 {missing value for option "-command"}
 
+proc ::process_notification {n} {
+    puts stderr ========
+    puts stderr "$n --> [$n cget -typecode] -- [$n cget -typestring]"
+}
+
 test manager-14 {
     manager addwatcher
 } -body {
-        ozw::manager addwatcher -command {puts stderr xxxx;puts stderr} 
+    ozw::manager addwatcher -command ::process_notification
 } -returnCodes ok -match glob -result \
 {}
 
@@ -418,7 +436,7 @@ test manager-18 {
 } -returnCodes error -match glob -result \
 {wrong # args: should be "ozw::manager adddriver /port/path|usb"}
 test manager-19 {
-    legal manager adddriver call to usb
+    legal manager adddriver call to add $DEVICE
 } -body {
         ozw::manager adddriver $DEVICE
         after 10000
@@ -426,13 +444,14 @@ test manager-19 {
 {}
 
 test manager-20 {
-    manager removedriver
+    manager adddriver -- not enough args
 } -body {
         ozw::manager adddriver
 } -returnCodes error -match glob -result \
-{wrong # args: should be "ozw::manager removedriver /port/path|usb"}
+{wrong # args: should be "ozw::manager adddriver /port/path|usb"}
+
 test manager-21 {
-    manager adddriver -- too many args
+    manager removedriver -- too many args
 } -body {
         ozw::manager removedriver /foo/bar bullwinkle
 } -returnCodes error -match glob -result \
@@ -448,11 +467,11 @@ test manager-22 {
 test manager-23 {
     there should be a ::ozw::inst namespace as a side effect of notification commands being made in the watcher callback
 } -body {
-    namespace children ::ozw::
+    lsort [namespace children ::ozw::]
 } -returnCodes ok -match glob -result \
-{::ozw::inst}
+{::ozw::inst ::ozw::notification}
 
-test manager-23 {
+test manager-24 {
     there should be a ::ozw::inst namespace as a side effect of notification commands being made in the watcher callback BUT there should be no commands in it because they should auto delete once they have been run
 } -body {
 } -body {

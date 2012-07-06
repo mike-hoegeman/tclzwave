@@ -17,6 +17,10 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
         return TCL_ERROR;
     }
+
+    extern int Ozw_NotificationInitArrays(Tcl_Interp *interp);
+    if (Ozw_NotificationInitArrays(interp) != TCL_OK) { return TCL_ERROR; }
+
     Tcl_CreateObjCommand(interp, 
         "::ozw::version", OzwVersionObjCmd, (ClientData) NULL, NULL
     );
