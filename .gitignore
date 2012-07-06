@@ -19,3 +19,6 @@ ozwsh
 
 # log file
 OZW_Log.txt
+
+# persistent config file written by library
+zwcfg*.xml
