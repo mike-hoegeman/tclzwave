@@ -4,6 +4,7 @@
 #include "ozw.h"
 #include <string>
 using namespace std;
+using namespace OpenZWave;
 
 static long Ozw_NotificationInstNo = 0;
 
@@ -35,6 +36,7 @@ static int Ozw_NotificationInstCmd(
 
     if (!strcmp(subcommand, "cget")) {
         const char *opt = Tcl_GetString(objv[2]);
+        Notification::NotificationType nt = ncd->notificationPtr->GetType();
         if (objc != 3) {
             Tcl_WrongNumArgs(interp, 2, objv, "-option");
             return TCL_ERROR;
@@ -56,7 +58,57 @@ static int Ozw_NotificationInstCmd(
             Tcl_SetObjResult(interp, Tcl_NewStringObj(s, -1));
             return TCL_OK;
 
+        } else if (!strcmp(opt, "-homeid")) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetHomeId()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-nodeid")) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetNodeId()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-valueid")) {
+            Tcl_AppendResult(interp, "TDB valueid not supported yet", NULL);
+            return TCL_ERROR;
+
+        } else if (!strcmp(opt, "-groupidx") && 
+            (Notification::Type_Group == nt)
+        ) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetGroupIdx()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-event") &&
+            (ncd->notificationPtr->GetType() == Notification::Type_NodeEvent)) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetEvent()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-buttonid") &&
+            (Notification::Type_CreateButton==nt || 
+             Notification::Type_DeleteButton==nt || 
+             Notification::Type_ButtonOn==nt || 
+             Notification::Type_ButtonOff==nt)
+        ) { 
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetButtonId()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-errorcode") &&
+            (Notification::Type_Error==nt)
+        ) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetErrorCode()));
+            return TCL_OK;
+
+        } else if (!strcmp(opt, "-byte")) {
+            Tcl_SetObjResult(interp, 
+                Tcl_NewIntObj((int)ncd->notificationPtr->GetByte()));
+            return TCL_OK;
+
         } else {
+
             Tcl_AppendResult(interp, 
                 "unrecognized option \"", opt, "\"", NULL);
                 return TCL_ERROR;
@@ -114,7 +166,6 @@ int Ozw_CreateNotificationInst(
     return TCL_OK;
 }
 
-using namespace OpenZWave;
 
 /* stilted, but i don't want to get into using maps or boost, etc.. */
 /* just going to make a tcl Array with the mappings */

@@ -405,8 +405,22 @@ test manager-13 {
 {missing value for option "-command"}
 
 proc ::process_notification {n} {
-    puts stderr ========
-    puts stderr "$n --> [$n cget -typecode] -- [$n cget -typestring]"
+    puts stderr ------------ 
+    ## -valueid
+    foreach {opt } {
+        -typecode
+        -typestring
+        -homeid 
+        -nodeid 
+        -groupidx 
+        -event 
+        -buttonid 
+        -errorcode 
+        -getbyte 
+    } {
+        catch {puts stderr "\t$opt\t[$n cget $opt]"}
+    }
+    puts stderr ------------ 
 }
 
 test manager-14 {
