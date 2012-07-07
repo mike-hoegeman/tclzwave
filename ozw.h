@@ -37,5 +37,6 @@ extern void Ozw_WatcherContextInit(
 extern void Ozw_WatcherContextUnInit(Ozw_WatcherContext *ctxt);
 extern void Ozw_WatcherContextReset(Ozw_WatcherContext *ctxt);
 extern int Ozw_CreateNotificationInst(Ozw_NotificationClientData *ncd);
+extern pthread_mutex_t Ozw_MainMutex;
 
 #endif

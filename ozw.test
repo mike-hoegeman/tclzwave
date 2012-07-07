@@ -492,3 +492,5 @@ test manager-24 {
     llength [info commands ::ozw::inst::*]
 } -returnCodes ok -match glob -result \
 {0}
+
+::ozw::exit 0
