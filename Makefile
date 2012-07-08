@@ -98,7 +98,7 @@ lib:
 
 $(OBJS): ozw.h
 
-OBJS = ozwsh.o init.o options.o manager.o watcher.o notification.o
+OBJS = ozwsh.o init.o options.o manager.o watcher.o notification.o log.o
 ozwsh:	$(OBJS) lib
 	$(LD) $(LDFLAGS) $(OBJS) $(LIBS) \
           -framework IOKit -framework CoreFoundation -o ozwsh

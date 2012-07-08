@@ -13,6 +13,7 @@
 #include "Node.h"
 #include "Group.h"
 #include "Notification.h"
+#include "Log.h"
 
 typedef struct Ozw_WatcherContext {
     int initialized;

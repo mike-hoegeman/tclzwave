@@ -4,6 +4,7 @@
 #include "tcl.h"
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
 
 #if TARGET_API_MAC_CARBON
 #   include <Tcl/tcl.h>
@@ -32,6 +33,12 @@ static void Ozw_TclMainLoop() {
         pthread_mutex_unlock( &Ozw_MainMutex );
     }
 }
+static void OzwVersionDeleteProc(ClientData clientData) {
+    // convenient place to put the mutex cleanup;
+    pthread_mutex_t *mainMutexPtr = (pthread_mutex_t *)clientData;
+    pthread_mutex_destroy(mainMutexPtr);
+    memset(mainMutexPtr, sizeof(pthread_mutex_t), '\0');
+}
 
 DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
@@ -39,10 +46,11 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     }
 
     /* 
-     * set up a lock so that the openwave gthread that handles notifications
-     * share use of the tcl interpreter in an orderly manner
+     * set up a lock so that the openwave thread that handles notifications
+     * can share use of the tcl interpreter w/ main thread in an orderly manner
+     #
      * we (should?) have the notification callback at the c level
-     * to just place the notification tcl commands into the "after idle" queue
+     * just place the notification tcl commands into the "after idle" queue
      * and then return. then at the tcl level the commands are getting executed
      * in the main thread. much lest contention possibilities that way.
      */
@@ -56,7 +64,8 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, 
         "::ozw::exit", OzwExitObjCmd, (ClientData) NULL, NULL);
     Tcl_CreateObjCommand(interp, 
-        "::ozw::version", OzwVersionObjCmd, (ClientData) NULL, NULL);
+        "::ozw::version", OzwVersionObjCmd, 
+        (ClientData) &Ozw_MainMutex, OzwVersionDeleteProc);
     Tcl_SetMainLoop(Ozw_TclMainLoop);
 
     extern int Ozw_NotificationInitArrays(Tcl_Interp *interp);
@@ -65,12 +74,16 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     if (OzwOptions_Init(interp) != TCL_OK) { return TCL_ERROR; }
     extern int OzwManager_Init(Tcl_Interp *interp);
     if (OzwManager_Init(interp) != TCL_OK) { return TCL_ERROR; }
+    extern int OzwLog_Init(Tcl_Interp *interp);
+    if (OzwLog_Init(interp) != TCL_OK) { return TCL_ERROR; }
+
     return Tcl_PkgProvide(interp, "ozw", "0.1");
 }
 
 DLLEXPORT int Ozw_SafeInit(Tcl_Interp *interp) {
     return Ozw_Init(interp);
 }
+
 
 static int OzwVersionObjCmd(
     ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]

@@ -307,6 +307,42 @@ test options-40 {
 } -returnCodes ok -match glob -result \
 {0}
 
+test log-1 {
+    not enough args
+} -body {
+    ::ozw::log
+} -returnCodes error -match glob -result \
+{wrong # args: should be "::ozw::log subcommand ?arg ... arg?"}
+
+test log-2 {
+    bad subcmd
+} -body {
+    ::ozw::log foo -bar bullwinkle
+} -returnCodes error -match glob -result \
+{illegal subcommand "foo"}
+
+test log-3 {
+        not enoutgh args for write
+} -body {
+    ::ozw::log write
+} -returnCodes error -match glob -result \
+{wrong # args: should be "::ozw::log write LogLevel_Xxx messagetext"}
+
+test log-4 {
+    too many write args
+} -body {
+    ::ozw::log write LogLevel_Debug foo bar
+} -returnCodes error -match glob -result \
+{wrong # args: should be "::ozw::log write LogLevel_Xxx messagetext"}
+
+test log-5 {
+        write - illegal log type
+} -body {
+    ::ozw::log write LogLevel_Foo "hi"
+} -returnCodes error -match glob -result \
+{"LogLevel_Foo" is not a valid loglevel. should be one of: LogLevel_None, LogLevel_Always, LogLevel_Fatal, LogLevel_Error, LogLevel_Warning, LogLevel_Alert, LogLevel_Info, LogLevel_Detail, LogLevel_Debug, LogLevel_Internal}
+
+
 test manager-1 {
    bogus manager command
 } -body {
@@ -492,5 +528,15 @@ test manager-24 {
     llength [info commands ::ozw::inst::*]
 } -returnCodes ok -match glob -result \
 {0}
+
+test log-99 {
+        write - ok
+} -body {
+    ::ozw::log write LogLevel_Always "(Always) TEST OF log Write from Tcl Extension"
+    ::ozw::log write LogLevel_Info "(Info) TEST OF log Write from Tcl Extension"
+    ::ozw::log write LogLevel_Fatal "(Fatal) TEST OF log Write from Tcl Extension"
+    ::ozw::log write LogLevel_Debug "(Debug) TEST OF log Write from Tcl Extension"
+} -returnCodes ok -match glob -result \
+{}
 
 ::ozw::exit 0
