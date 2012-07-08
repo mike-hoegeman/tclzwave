@@ -138,6 +138,7 @@ int Ozw_CreateNotificationInst(
         Ozw_NotificationInstDelProc
     );
     {
+        Tcl_Interp *interp = ncd->watcherContextPtr->interp;
         Tcl_DString ds;
         Tcl_DStringInit(&ds);
         Tcl_DStringAppend(
@@ -145,18 +146,22 @@ int Ozw_CreateNotificationInst(
         );
         Tcl_DStringAppendElement(&ds, inst_name);
         eval_result = Tcl_EvalEx(
-            ncd->watcherContextPtr->interp, 
+            interp,
             Tcl_DStringValue(&ds), -1, 
             TCL_EVAL_GLOBAL
         );
-        Tcl_DStringGetResult(ncd->watcherContextPtr->interp, &ds);
+        Tcl_DStringGetResult(interp, &ds);
         if (eval_result != TCL_OK) {
+            const char *ei = Tcl_GetVar(
+                interp, "::errorInfo", TCL_GLOBAL_ONLY);
             fprintf(stderr, 
-                "Error running notification callback: %s\n----\n", 
-                Tcl_DStringValue(&ds));
+                "Error running notification callback: %s\nErrorInfo:\n----\n%s\n----\n", 
+                Tcl_DStringValue(&ds),
+                ei == NULL ? "???" : ei
+            );
         }
         if (Tcl_DeleteCommandFromToken(
-            ncd->watcherContextPtr->interp,
+            interp,
             command_token) != TCL_OK) {
             fprintf(stderr, "error deleting notification instance"); 
         }

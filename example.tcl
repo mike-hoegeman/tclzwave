@@ -15,44 +15,91 @@ set ::ExampleApp::Initialized false
 #	list<ValueID>	m_values;
 #}NodeInfo;
 #
+
+proc ::ExampleApp::AddNodeInfo {homeid nodeid polled values} {
+    set key $homeid.$nodeid
+    set ::ExampleApp::Nodes($key) [list \
+        -homeid $homeid \
+        -nodeid $nodeid \
+        -polled $polled \
+        -values $values \
+    ]
+    ::ExampleApp::Log " +++ Added Node $::ExampleApp::Nodes($key)"
+}
+proc ::ExampleApp::NodeInfoAddValue {nodeinfo value} {
+    array set ni $nodeinfo
+    lappend $ni(-values) $value 
+    array get $ni
+}
+
 #static list<NodeInfo*> g_nodes;
+array set ::ExampleApp::Nodes {}
+
 #static pthread_mutex_t g_criticalSection;
 #static pthread_cond_t  initCond  = PTHREAD_COND_INITIALIZER;
 #static pthread_mutex_t initMutex = PTHREAD_MUTEX_INITIALIZER;
 
-#
-#//-----------------------------------------------------------------------------
-#// <GetNodeInfo>
-#// Return the NodeInfo object associated with this notification
-#//-----------------------------------------------------------------------------
-#NodeInfo* GetNodeInfo
-#(
-#	Notification const* _notification
-#)
-#{
-#	uint32 const homeId = _notification->GetHomeId();
-#	uint8 const nodeId = _notification->GetNodeId();
-#	for( list<NodeInfo*>::iterator it = g_nodes.begin(); it != g_nodes.end(); ++it )
-#	{
-#		NodeInfo* nodeInfo = *it;
-#		if( ( nodeInfo->m_homeId == homeId ) && ( nodeInfo->m_nodeId == nodeId ) )
-#		{
-#			return nodeInfo;
-#		}
-#	}
-#
-#	return NULL;
-#}
-#
+#-----------------------------------------------------------------------------
+# <GetNodeInfo>
+# Return the NodeInfo object associated with this notification
+#-----------------------------------------------------------------------------
+# we could use tcl objects or dicts here but what we 
+# are doing is simple enough to just use tag/value lists in a tcl array 
+# for node info mgmt
+proc ::ExampleApp::GetNodeInfo {notification} {
+    set key [$notification cget -homeid].[$notification cget -nodeid]
+    if {[info exists ::ExampleApp::Nodes($key)]} {
+        return $::ExampleApp::Nodes($key)
+    }
+    return ""
+}
+proc ::ExampleApp::NodeInfoAddValue {notification value} {
+    set key [$notification cget -homeid].[$notification cget -nodeid]
+    if {[info exists ::ExampleApp::Nodes($key)]} {
+        array set a $::ExampleApp::Nodes($key)
+        lappend $a(-values) $value
+        set ::ExampleApp::Nodes($key) [array get a]
+        return true
+    } else {
+        ::ExampleApp::Log "could not find node into w/ key ( $key ) "
+        return false
+    }
+    ::ExampleApp::Log "logic error"
+    return false
+}
+proc ::ExampleApp::NodeInfoRemoveValue {notification value} {
+    set key [$notification cget -homeid].[$notification cget -nodeid]
+    if {[info exists ::ExampleApp::Nodes($key)]} {
+        array set a $::ExampleApp::Nodes($key)
+        set idx [lsearch -exact $a(-values) $value]
+        if {$idx == -1} {
+            ::ExampleApp::Log \
+                "could not find value ( $value ) to remove from nodeinfo $key"
+            return false
+        }
+        # delete found value from list
+        set a(-values) [lreplace $a(-values) $idx $idx {}]
+        # update array entry w/ new data
+        set ::ExampleApp::Nodes($key) [array get a]
+        return true
+    } else {
+        ::ExampleApp::Log "could not find node into w/ key ( $key ) "
+    }
+    ::ExampleApp::Log "logic error"
+    return false
+}
 
-#//-----------------------------------------------------------------------------
-#// <OnNotification>
-#// Callback that is triggered when a value, group or node changes
-#//-----------------------------------------------------------------------------
+proc ::ExampleApp::Log {msg} {
+    ::ozw::log write LogLevel_Info "ExampleApp: ** $msg"
+}
+ 
 
+#-----------------------------------------------------------------------------
+# <OnNotification>
+# Callback that is triggered when a value, group or node changes
+#-----------------------------------------------------------------------------
 proc ::ExampleApp::OnNotification {notification} {
 
-    ::ozw::log write LogLevel_Info " **** OnNotification.."
 
     ## the tcl extension automatically make a critical section 
     ## wrapper/lock around this proc to avoid conflicts with the main thread
@@ -60,66 +107,35 @@ proc ::ExampleApp::OnNotification {notification} {
     ## like wise the main loop runs each event it processes in a 
     ## pthread_mutex_(un)lock( &OZW_MainMutex ); wrapping
 
-#
-#	switch( _notification->GetType() )
-#	{
-#		case Notification::Type_ValueAdded:
-#		{
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				// Add the new value to our list
-#				nodeInfo->m_values.push_back( _notification->GetValueID() );
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_ValueRemoved:
-#		{
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				// Remove the value from out list
-#				for( list<ValueID>::iterator it = nodeInfo->m_values.begin(); it != nodeInfo->m_values.end(); ++it )
-#				{
-#					if( (*it) == _notification->GetValueID() )
-#					{
-#						nodeInfo->m_values.erase( it );
-#						break;
-#					}
-#				}
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_ValueChanged:
-#		{
-#			// One of the node values has changed
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				nodeInfo = nodeInfo;		// placeholder for real action
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_Group:
-#		{
-#			// One of the node's association groups has changed
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				nodeInfo = nodeInfo;		// placeholder for real action
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_NodeAdded:
-#		{
-#			// Add the new node to our list
-#			NodeInfo* nodeInfo = new NodeInfo();
-#			nodeInfo->m_homeId = _notification->GetHomeId();
-#			nodeInfo->m_nodeId = _notification->GetNodeId();
-#			nodeInfo->m_polled = false;		
-#			g_nodes.push_back( nodeInfo );
-#			break;
-#		}
+    set type  [$notification cget -typestring]
+    ::ExampleApp::Log " **** OnNotification.. ==> $type"
+    switch -exact -- $type Type_ValueAdded {
+        if {[::ExampleApp::GetNodeInfo $notification] != ""} {
+            ::ExampleApp::NodeInfoAddValue $notification \
+                [$notification cget -valueid]
+        }
+    } Type_ValueRemoved {
+        if {[::ExampleApp::GetNodeInfo $notification] != ""} {
+            ::ExampleApp::NodeInfoRemoveValue $notification \
+                [$notification cget -valueid]
+        }
+    } Type_ValueChanged {
+        ## One of the node values has changed
+        if {[set n [::ExampleApp::GetNodeInfo $notification]] != ""} {
+            ::ExampleApp::Log "Node Value for $n changed"
+        }
+    } Type_Group {
+        ## One of the node's association groups has changed
+        if {[set n [::ExampleApp::GetNodeInfo $notification]] != ""} {
+            ::ExampleApp::Log "Node assoc. groups for $n changed"
+        }
+    } Type_NodeAdded {
+        ::ExampleApp::AddNodeInfo \
+            [$notification cget -homeid] \
+            [$notification cget -nodeid] \
+            false \
+            {}
+    }
 #
 #		case Notification::Type_NodeRemoved:
 #		{
@@ -200,8 +216,9 @@ proc ::ExampleApp::OnNotification {notification} {
 #	}
 #
 #	pthread_mutex_unlock( &g_criticalSection );
+#
 
-}
+
 
 #
 # Create the driver and then wait
@@ -281,11 +298,14 @@ proc ::ExampleApp::Main {} {
             ## ??
         } else {
  
- 		::ozw::manager writeconfig ::ExampleApp::$HomeId;
-#
-#		// The section below demonstrates setting up polling for a variable.  In this simple
-#		// example, it has been hardwired to poll COMMAND_CLASS_BASIC on the each node that 
-#		// supports this setting.
+            ::ozw::manager writeconfig ::ExampleApp::$HomeId;
+
+            ## The section below demonstrates setting up polling for 
+            ## a variable.  In this simple
+            ## example, it has been hardwired to poll 
+            ## COMMAND_CLASS_BASIC on the each node that 
+            ## supports this setting.
+
 #		pthread_mutex_lock( &g_criticalSection );
 #		for( list<NodeInfo*>::iterator it = g_nodes.begin(); it != g_nodes.end(); ++it )
 #		{
@@ -342,8 +362,9 @@ proc ::ExampleApp::Main {} {
  	::ozw::options destroy
 
         # in tcl , the global mutex Ozw_MainMutex similar to 
-        # g_criticalSection in the C++ example app) is desooyed when the 
-        # extension commands are destoryed in the tcl interpreter
+        # g_criticalSection in the C++ example app it is internal 
+        # to the tcl extension and is destroyed when the 
+        # extension commands are destroyed in the tcl interpreter
  	#//pthread_mutex_destroy( &g_criticalSection );
 
         ::ozw::exit 0
