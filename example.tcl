@@ -2,7 +2,7 @@
 #	example.tcl
 #	tcl version of Minimal application to test OpenZWave.
 #--------------------------------------------------------------------------
-package require ozw
+puts stderr "ozw package: [package require ozw]"
 namespace eval ::ExampleApp {}
 
 set ::ExampleApp::Initialized false
@@ -51,6 +51,9 @@ set ::ExampleApp::Initialized false
 #//-----------------------------------------------------------------------------
 
 proc ::ExampleApp::OnNotification {notification} {
+
+    ::ozw::log write LogLevel_Info " **** OnNotification.."
+
     ## the tcl extension automatically make a critical section 
     ## wrapper/lock around this proc to avoid conflicts with the main thread
     ## it does this w/ a pthread_mutex_(un)lock( &OZW_MainMutex );
@@ -167,7 +170,7 @@ proc ::ExampleApp::OnNotification {notification} {
 #
 #		case Notification::Type_DriverReady:
 #		{
-#			g_homeId = _notification->GetHomeId();
+#			set $ExampleApp::g_homeId [$notification cget -homeid]
 #			break;
 #		}
 #
@@ -226,9 +229,12 @@ proc ::ExampleApp::Main {} {
             -userpath "./" \
             -commandline ""
 
- 	ozw::options addoptionint "SaveLogLevel" $::ozw::LogLevel_Detail
- 	ozw::options addoptionint "QueueLogLevel" $::ozw::LogLevel_Debug
- 	ozw::options addoptionint "DumpTrigger" $::ozw::LogLevel_Error
+ 	ozw::options addoptionint "SaveLogLevel" \
+            [::ozw::log levelcode LogLevel_Detail]
+ 	ozw::options addoptionint "QueueLogLevel" \
+            [::ozw::log levelcode LogLevel_Debug]
+ 	ozw::options addoptionint "DumpTrigger" \
+            [::ozw::log levelcode LogLevel_Error]
  	ozw::options addoptionint "PollInterval" 500
  	ozw::options addoptionbool "IntervalBetweenPolls" true
  	ozw::options addoptionbool "ValidateValueChanges" true
@@ -238,15 +244,16 @@ proc ::ExampleApp::Main {} {
  
  	## Add a callback handler to the manager.  
         ## The second argument is a context that
- 	manager addwatcher -command ::ExampleApp::OnNotification
+ 	::ozw::manager addwatcher -command ::ExampleApp::OnNotification
  
  	## Add a Z-Wave Driver
  	## Modify this line to set the correct serial port for your 
         ## PC interface.
 
  	set port "/dev/cu.usbserial";
- 	if { ::argc > 1 } {
-            set port [lindex $::argv 1]
+        ::ozw::log write LogLevel_Info "argv is $::argv"
+ 	if { $::argc > 0 } {
+            set port [lindex $::argv 0]
  	} 
         
         if { $port == "usb"} {
@@ -270,11 +277,11 @@ proc ::ExampleApp::Main {} {
 	## writing the configuration file.  (Maybe write again after
 	## sleeping nodes have been queried as well.)
 
- 	if { $::ExampleApp::InitFailed ) {
+ 	if { $::ExampleApp::InitFailed } {
             ## ??
         } else {
-#
-#		Manager::Get()->WriteConfig( g_homeId );
+ 
+ 		::ozw::manager writeconfig ::ExampleApp::$HomeId;
 #
 #		// The section below demonstrates setting up polling for a variable.  In this simple
 #		// example, it has been hardwired to poll COMMAND_CLASS_BASIC on the each node that 
@@ -321,20 +328,25 @@ proc ::ExampleApp::Main {} {
 #		printf("Reads: %d Writes: %d CAN: %d NAK: %d ACK: %d Out of Frame: %d\n", data.s_readCnt, data.s_writeCnt, data.s_CANCnt, data.s_NAKCnt, data.s_ACKCnt, data.s_OOFCnt);
 #		printf("Dropped: %d Retries: %d\n", data.s_dropped, data.s_retries);
 #	}
-#
-#	// program exit (clean up)
-#	if( strcasecmp( port.c_str(), "usb") == 0 )
-#	{
-#		Manager::Get()->RemoveDriver( "HID Controller" );
-#	}
-#	else
-#	{
-#		Manager::Get()->RemoveDriver( port );
-#	}
-#
-#	Manager::Get()->RemoveWatcher( OnNotification, NULL );
-#	Manager::Destroy();
-#	Options::Destroy();
-#	pthread_mutex_destroy( &g_criticalSection );
-#	return 0;
-#}
+
+        vwait forever
+
+ 	// program exit (clean up)
+ 	//if( strcasecmp( port.c_str(), "usb") == 0 ) {
+        //Manager::Get()->RemoveDriver( "HID Controller" );
+ 	//} else {
+ 	//}
+        ::ozw::manager removedriver $port
+ 	::ozw::manager removewatcher ::ExampleApp::OnNotification
+ 	::ozw::manager destroy
+ 	::ozw::options destroy
+
+        # in tcl , the global mutex Ozw_MainMutex similar to 
+        # g_criticalSection in the C++ example app) is desooyed when the 
+        # extension commands are destoryed in the tcl interpreter
+ 	#//pthread_mutex_destroy( &g_criticalSection );
+
+        ::ozw::exit 0
+ }
+
+::ExampleApp::Main

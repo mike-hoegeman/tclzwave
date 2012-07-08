@@ -69,6 +69,23 @@ static int OzwLogObjCmd(
         OpenZWave::Log::Write(level, "%s", Tcl_GetString(objv[3]));
         return TCL_OK;
 
+    } else if (!strcmp(subcommand, "levelcode")) {
+        if (objc != 3) {
+            Tcl_WrongNumArgs(interp, 2, objv, "LogLevel_Xxx");
+            return TCL_ERROR;
+        }
+        const char *sym = Tcl_GetString(objv[2]);
+        if (sym == NULL) {
+            Tcl_AppendResult(interp, "error getting loglevel argument", NULL);
+            return TCL_ERROR;
+        }
+        enum OpenZWave::LogLevel level;
+        if (OzwLogLevelFromSymbol(interp, sym, &level) != TCL_OK) {
+            return TCL_ERROR;
+        }
+        Tcl_SetObjResult(interp, Tcl_NewIntObj((int)level));
+        return TCL_OK;
+
     } else {
         Tcl_AppendResult(interp, 
             "illegal subcommand \"", subcommand, "\"", NULL);
