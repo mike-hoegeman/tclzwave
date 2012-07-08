@@ -26,12 +26,6 @@ proc ::ExampleApp::AddNodeInfo {homeid nodeid polled values} {
     ]
     ::ExampleApp::Log " +++ Added Node $::ExampleApp::Nodes($key)"
 }
-proc ::ExampleApp::NodeInfoAddValue {nodeinfo value} {
-    array set ni $nodeinfo
-    lappend $ni(-values) $value 
-    array get $ni
-}
-
 #static list<NodeInfo*> g_nodes;
 array set ::ExampleApp::Nodes {}
 
@@ -57,7 +51,7 @@ proc ::ExampleApp::NodeInfoAddValue {notification value} {
     set key [$notification cget -homeid].[$notification cget -nodeid]
     if {[info exists ::ExampleApp::Nodes($key)]} {
         array set a $::ExampleApp::Nodes($key)
-        lappend $a(-values) $value
+        lappend a(-values) $value
         set ::ExampleApp::Nodes($key) [array get a]
         return true
     } else {
