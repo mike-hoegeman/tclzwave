@@ -15,7 +15,6 @@ set ::ExampleApp::Initialized false
 #	list<ValueID>	m_values;
 #}NodeInfo;
 #
-
 proc ::ExampleApp::AddNodeInfo {homeid nodeid polled values} {
     set key $homeid.$nodeid
     set ::ExampleApp::Nodes($key) [list \
@@ -26,6 +25,33 @@ proc ::ExampleApp::AddNodeInfo {homeid nodeid polled values} {
     ]
     ::ExampleApp::Log " +++ Added Node $::ExampleApp::Nodes($key)"
 }
+proc ::ExampleApp::UpdateNodeInfo {notification args} {
+    set key [$notification cget -homeid].[$notification cget -nodeid]
+    if {[info exists ::ExampleApp::Nodes($key)]} {
+        array set a ::ExampleApp::Nodes($key)
+        array set a $args
+        set ::ExampleApp::Nodes($key) [array get a]
+        ::ExampleApp::Log \
+            "updated node $key with: $args: it's now [array get a]"
+        return true
+    } else {
+        ::ExampleApp::Log "could not find node info w/ key ( $key ) "
+        return false
+    }
+    return false
+}
+proc ::ExampleApp::RemoveNodeInfo {notification} {
+    set key [$notification cget -homeid].[$notification cget -nodeid]
+    if {[info exists ::ExampleApp::Nodes($key)]} {
+        unset ::ExampleApp::Nodes($key)
+        return true
+    } else {
+        ::ExampleApp::Log "could not find node info w/ key ( $key ) "
+        return false
+    }
+    return false
+}
+
 #static list<NodeInfo*> g_nodes;
 array set ::ExampleApp::Nodes {}
 
@@ -55,10 +81,9 @@ proc ::ExampleApp::NodeInfoAddValue {notification value} {
         set ::ExampleApp::Nodes($key) [array get a]
         return true
     } else {
-        ::ExampleApp::Log "could not find node into w/ key ( $key ) "
+        ::ExampleApp::Log "could not find node info w/ key ( $key ) "
         return false
     }
-    ::ExampleApp::Log "logic error"
     return false
 }
 proc ::ExampleApp::NodeInfoRemoveValue {notification value} {
@@ -79,7 +104,6 @@ proc ::ExampleApp::NodeInfoRemoveValue {notification value} {
     } else {
         ::ExampleApp::Log "could not find node into w/ key ( $key ) "
     }
-    ::ExampleApp::Log "logic error"
     return false
 }
 
@@ -95,10 +119,10 @@ proc ::ExampleApp::Log {msg} {
 proc ::ExampleApp::OnNotification {notification} {
 
 
-    ## the tcl extension automatically make a critical section 
+    ## the tcl extension automatically puts a critical section 
     ## wrapper/lock around this proc to avoid conflicts with the main thread
     ## it does this w/ a pthread_mutex_(un)lock( &OZW_MainMutex );
-    ## like wise the main loop runs each event it processes in a 
+    ## likewise, the main loop in owzsh runs each event it processes in a 
     ## pthread_mutex_(un)lock( &OZW_MainMutex ); wrapping
 
     set type  [$notification cget -typestring]
@@ -129,88 +153,37 @@ proc ::ExampleApp::OnNotification {notification} {
             [$notification cget -nodeid] \
             false \
             {}
+    } Type_NodeRemoved {
+        ::ExampleApp::RemoveNodeInfo $notification
+    } Type_NodeEvent {
+        ## We have received an event from the node, caused by a
+        ## basic_set or hail message.
+        ::ExampleApp::Log \
+            "Recvd event from node. caused by a basic_set or hail msg"
+    } Type_PollingDisabled  {
+        ::ExampleApp::UpdateNodeInfo $notification -polled false
+    } Type_PollingEnabled {
+        ::ExampleApp::UpdateNodeInfo $notification -polled true
+    } Type_DriverReady {
+        set ::ExampleApp::HomeId [$notification cget -homeid]
+        ::ExampleApp::Log "Driver Ready: home id = $ExampleApp::HomeId" 
+    } Type_DriverFailed {
+        set ::ExampleApp::InitFailed true
+        set ::ExampleApp::Initialized true 
+        ::ExampleApp::Log "set ::ExampleApp::Initialized true"
+    } Type_AwakeNodesQueried - Type_AllNodesQueried {
+        set ::ExampleApp::InitFailed false
+        set ::ExampleApp::Initialized true 
+        ::ExampleApp::Log "set ::ExampleApp::Initialized true"
+    } Type_DriverReset - \
+      Type_MsgComplete - \
+      Type_NodeNaming - \
+      Type_NodeProtocolInfo - \
+      Type_NodeQueriesComplete - \
+      default {
+        ::ExampleApp::Log "$type: (no action for this event type)"
     }
-#
-#		case Notification::Type_NodeRemoved:
-#		{
-#			// Remove the node from our list
-#			uint32 const homeId = _notification->GetHomeId();
-#			uint8 const nodeId = _notification->GetNodeId();
-#			for( list<NodeInfo*>::iterator it = g_nodes.begin(); it != g_nodes.end(); ++it )
-#			{
-#				NodeInfo* nodeInfo = *it;
-#				if( ( nodeInfo->m_homeId == homeId ) && ( nodeInfo->m_nodeId == nodeId ) )
-#				{
-#					g_nodes.erase( it );
-#					delete nodeInfo;
-#					break;
-#				}
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_NodeEvent:
-#		{
-#			// We have received an event from the node, caused by a
-#			// basic_set or hail message.
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				nodeInfo = nodeInfo;		// placeholder for real action
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_PollingDisabled:
-#		{
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				nodeInfo->m_polled = false;
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_PollingEnabled:
-#		{
-#			if( NodeInfo* nodeInfo = GetNodeInfo( _notification ) )
-#			{
-#				nodeInfo->m_polled = true;
-#			}
-#			break;
-#		}
-#
-#		case Notification::Type_DriverReady:
-#		{
-#			set $ExampleApp::g_homeId [$notification cget -homeid]
-#			break;
-#		}
-#
-#		case Notification::Type_DriverFailed:
-#		{
-#			set ::ExampleApp::InitFailed true
-#			set ::ExampleApp::Initialized true 
-#			break;
-#		}
-#
-#		case Notification::Type_AwakeNodesQueried:
-#		case Notification::Type_AllNodesQueried:
-#		{
-#			set ::ExampleApp::InitFailed false
-#			set ::ExampleApp::Initialized true 
-#			break;
-#		}
-#
-#		case Notification::Type_DriverReset:
-#		case Notification::Type_MsgComplete:
-#		case Notification::Type_NodeNaming:
-#		case Notification::Type_NodeProtocolInfo:
-#		case Notification::Type_NodeQueriesComplete:
-#		default:
-#		{
-#		}
-#	}
-#
-#	pthread_mutex_unlock( &g_criticalSection );
-#
+}
 
 
 
@@ -279,7 +252,9 @@ proc ::ExampleApp::Main {} {
 	## file.  In a normal app, we would be handling notifications
 	## and building a UI for the user.
         ##
+        ::ExampleApp::Log "!!! WAIT.."
         vwait ::ExampleApp::Initialized
+        ::ExampleApp::Log "!!! ::ExampleApp::Initialized fired"
 
 	## Since the configuration file contains command class
 	## information that is only known after the nodes on the network
@@ -292,7 +267,8 @@ proc ::ExampleApp::Main {} {
             ## ??
         } else {
  
-            ::ozw::manager writeconfig ::ExampleApp::$HomeId;
+            ::ozw::manager writeconfig $::ExampleApp::HomeId;
+            ::ExampleApp::Log "wrote configuration. (initialization done)"
 
             ## The section below demonstrates setting up polling for 
             ## a variable.  In this simple
@@ -364,4 +340,7 @@ proc ::ExampleApp::Main {} {
         ::ozw::exit 0
  }
 
-::ExampleApp::Main
+# place the main procedure inside the tcl event loop
+# so that vwait etc.. work in harmony with events occuring in notification 
+# thread
+after 0 ::ExampleApp::Main
