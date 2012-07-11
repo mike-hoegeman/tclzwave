@@ -12,6 +12,9 @@ using namespace OpenZWave;
 
 static long Ozw_NotificationInstNo = 0;
 
+static const char * 
+Ozw_NotificationTypeStrFromCode(int ntype, const char *ifunknown);
+
 static void Ozw_NotificationInstDelProc(
     ClientData clientData
 ) {
@@ -130,6 +133,69 @@ d        ) {
 }
 #endif
 
+static int
+Ozw_NotificationBuildMsg(
+    Tcl_DString *msgPtr,
+    OpenZWave::Notification const* _notification
+) {
+    char buf[100];
+    Notification::NotificationType nt =_notification->GetType();
+    /* build the message */
+    Tcl_DStringAppendElement(msgPtr, "notification");
+    Tcl_DStringStartSublist(msgPtr);
+
+
+    Tcl_DStringAppendElement(msgPtr, "type");
+    Tcl_DStringAppendElement (msgPtr, 
+        Ozw_NotificationTypeStrFromCode(_notification->GetType(), "???"));
+
+    Tcl_DStringAppendElement(msgPtr, "nodeid");
+    snprintf(buf, sizeof(buf), "%d", _notification->GetNodeId());
+    Tcl_DStringAppendElement(msgPtr, buf);
+
+    Tcl_DStringAppendElement(msgPtr, "homeid");
+    snprintf(buf, sizeof(buf), "%d", _notification->GetHomeId());
+    Tcl_DStringAppendElement(msgPtr, buf);
+
+    /* valueid to be done */
+
+    if (Notification::Type_Group == nt) {
+        Tcl_DStringAppendElement(msgPtr, "groupidx");
+        snprintf(buf, sizeof(buf), "%d", _notification->GetGroupIdx());
+        Tcl_DStringAppendElement(msgPtr, buf);
+    } 
+
+    if (nt == Notification::Type_NodeEvent) {
+        Tcl_DStringAppendElement(msgPtr, "event");
+        snprintf(buf, sizeof(buf), "%d", _notification->GetEvent());
+        Tcl_DStringAppendElement(msgPtr, buf);
+    }
+
+    if (Notification::Type_CreateButton==nt || 
+        Notification::Type_DeleteButton==nt || 
+        Notification::Type_ButtonOn==nt || 
+        Notification::Type_ButtonOff==nt) {
+        Tcl_DStringAppendElement(msgPtr, "buttonid");
+        snprintf(buf, sizeof(buf), "%d", _notification->GetButtonId());
+        Tcl_DStringAppendElement(msgPtr, buf);
+    }
+
+    if (Notification::Type_Error==nt) {
+        Tcl_DStringAppendElement(msgPtr, "errorcode");
+        snprintf(buf, sizeof(buf), "%d", _notification->GetErrorCode());
+        Tcl_DStringAppendElement(msgPtr, buf);
+    }
+
+    if (1) {
+        Tcl_DStringAppendElement(msgPtr, "byte");
+        snprintf(buf, sizeof(buf), "%d", (int)_notification->GetByte());
+        Tcl_DStringAppendElement(msgPtr, buf);
+    }
+
+    Tcl_DStringEndSublist(msgPtr);
+    Tcl_DStringAppend(msgPtr, "\n", -1);
+    return TCL_OK;
+}
 
 /* callback employed by ozw::manager addwatcher -command {xxx} */
 /* which then in turn runs the tcl command {xxx} */
@@ -143,7 +209,6 @@ void Ozw_Watcher (
     OzwManagerClientData *mgrDataPtr = (OzwManagerClientData *) _context;
     Tcl_DString msg;
     Tcl_DStringInit(&msg);
-    char buf[100];
     struct sockaddr_in serv_name;
 
     if (mgrDataPtr->notificationSendSocket == -1) {
@@ -185,15 +250,11 @@ void Ozw_Watcher (
         
     }
 
-    /* build the message */
-    Tcl_DStringAppendElement(&msg, "type");
-    snprintf(buf, 100, "%d", _notification->GetType());
-    Tcl_DStringAppendElement(&msg, buf);
-
-    Tcl_DStringAppendElement(&msg, "nodeid");
-    snprintf(buf, 100, "%d", _notification->GetNodeId());
-    Tcl_DStringAppendElement(&msg, buf);
-    Tcl_DStringAppend(&msg, "\n", -1);
+    if (Ozw_NotificationBuildMsg( &msg, _notification) != TCL_OK) {
+        OpenZWave::Log::Write(OpenZWave::LogLevel_Info, "%s",
+            "creation of notification message failed");
+        RETURN;
+    }
 
     int write_result = Tcl_Write(
         mgrDataPtr->notificationSendChannel, 
@@ -243,9 +304,18 @@ static ntpair ntpairs[] = {
   { -1, NULL},
 };
 
-int
-Ozw_NotificationInitArrays(Tcl_Interp *interp)
-{
+static const char * 
+Ozw_NotificationTypeStrFromCode(int ntype, const char *ifunknown) {
+    for(int x = 0; ntpairs[x].t != -1; x++) {
+        if (ntpairs[x].t == ntype) {
+            return ntpairs[x].s;
+        }
+    }
+    return ifunknown;
+}
+
+int 
+Ozw_NotificationInitArrays(Tcl_Interp *interp) {
  int res;
  char tbuf[100]; 
  const char *result = NULL;

@@ -8,23 +8,59 @@ namespace eval ::ExampleApp {}
 set ::ExampleApp::Initialized false
 set ::ExampleApp::InitFailed false
 
-proc ::ozw::nreader {sock} {
-        puts stderr "++++++ NREADER "
-        if {[eof $sock]} {
-            puts stderr "++++++ EOF. closing $sock"
-            close $sock
-            return
+
+##
+## at the moment, ## the tcl extensions assume that you will define 
+##
+## proc ::ozw::notificationacceptor {sock addr port} {...}
+## proc ::ozw::notificationreader {sock addr port} {...}
+## as procedures for handling incoming messaged from the thread
+## handling the C++ level notification callbacks 
+##
+## messags will be coming in in the fornm
+##
+##      "notification {type x nodeid n ...}\n"
+##
+proc ::ozw::notificationacceptor {sock addr port} {
+     fconfigure $sock -buffering line
+     fileevent $sock readable [list ozw::notificationreader $sock]
+}
+set ::ozw::notificationreaderproc ::ExampleApp::HandleNotification
+set ::ozw::notificationreaderbuffer {}
+proc ::ozw::notificationreader {sock} {
+    set nm reader; set lvl LogLevel_Info
+    if {[eof $sock]} {
+        ::ozw::log write $lvl \
+            "$nm: End of file on notification. closing channel $sock"
+        close $sock
+        return
+    }
+    set failed [catch {gets $sock data} err]
+    if $failed {
+        ::ozw::log write $lvl \
+            "$nm: Read error on notification. closing channel $sock"
+        close $sock
+        return
+    }
+    if {[info complete [append ::ozw::notificationreaderbuffer $data]]} {
+        if {[llength $::ozw::notificationreaderbuffer] % 2 != 0} {
+            ::ozw::log write $lvl \
+            "$nm: Makformed message buffer \"$::ozw::notificationreaderbuffer\""
+            set ::ozw::notificationreaderbuffer {}
         }
-        set data ""
-        puts stderr "++++++ GETS start"
-        set failed [catch {gets $sock data} err]
-        if $failed {
-            puts stderr "++++++ GETS ERR. closing $sock"
-            close $sock
-            return
+        set failed [catch {
+            foreach {tag data} $::ozw::notificationreaderbuffer {
+                $::ozw::notificationreaderproc $tag $data
+            }
+        } err]
+        if {$failed} {
+            ::ozw::log write $lvl \
+                "$nm: Error processing message [list $tag $data]"
+            ::ozw::log write $lvl \
+                "$nm: errorInfo: $::errorInfo"
         }
-        puts stderr "++++++ GETS complete ---> $data"
-        puts stderr "----- DONE"
+        set ::ozw::notificationreaderbuffer {}
+    }
 }
 
 #typedef struct
@@ -86,15 +122,17 @@ array set ::ExampleApp::Nodes {}
 # we could use tcl objects or dicts here but what we 
 # are doing is simple enough to just use tag/value lists in a tcl array 
 # for node info mgmt
-proc ::ExampleApp::GetNodeInfo {notification} {
-    set key [$notification cget -homeid].[$notification cget -nodeid]
+proc ::ExampleApp::GetNodeInfo {n} {
+    upvar $n notification
+    set key $notification(homeid).$notification(nodeid)
     if {[info exists ::ExampleApp::Nodes($key)]} {
         return $::ExampleApp::Nodes($key)
     }
     return ""
 }
 proc ::ExampleApp::NodeInfoAddValue {notification value} {
-    set key [$notification cget -homeid].[$notification cget -nodeid]
+    upvar $n notification
+    set key $notification(homeid).$notification(nodeid)
     if {[info exists ::ExampleApp::Nodes($key)]} {
         array set a $::ExampleApp::Nodes($key)
         lappend a(-values) $value
@@ -107,7 +145,8 @@ proc ::ExampleApp::NodeInfoAddValue {notification value} {
     return false
 }
 proc ::ExampleApp::NodeInfoRemoveValue {notification value} {
-    set key [$notification cget -homeid].[$notification cget -nodeid]
+    upvar $n notification
+    set key $notification(homeid).$notification(nodeid)
     if {[info exists ::ExampleApp::Nodes($key)]} {
         array set a $::ExampleApp::Nodes($key)
         set idx [lsearch -exact $a(-values) $value]
@@ -132,11 +171,8 @@ proc ::ExampleApp::Log {msg} {
 }
  
 
-#-----------------------------------------------------------------------------
-# <OnNotification>
-# Callback that is triggered when a value, group or node changes
-#-----------------------------------------------------------------------------
-proc ::ExampleApp::OnNotification {notification} {
+proc ::ExampleApp::HandleNotification {tag data} {
+    array set n $data
 
 
     ## the tcl extension automatically puts a critical section 
@@ -145,47 +181,42 @@ proc ::ExampleApp::OnNotification {notification} {
     ## likewise, the main loop in owzsh runs each event it processes in a 
     ## pthread_mutex_(un)lock( &OZW_MainMutex ); wrapping
 
-    set type  [$notification cget -typestring]
-    ::ExampleApp::Log " **** OnNotification.. ==> $type"
-    switch -exact -- $type Type_ValueAdded {
+    set typestring $n(type)
+
+    ::ExampleApp::Log " **** OnNotification.. ==> $typestring"
+    switch -exact -- $typestring Type_ValueAdded {
         if {[::ExampleApp::GetNodeInfo $notification] != ""} {
-            ::ExampleApp::NodeInfoAddValue $notification \
-                [$notification cget -valueid]
+            ::ExampleApp::NodeInfoAddValue n $n(valueid)
         }
     } Type_ValueRemoved {
         if {[::ExampleApp::GetNodeInfo $notification] != ""} {
-            ::ExampleApp::NodeInfoRemoveValue $notification \
-                [$notification cget -valueid]
+            ::ExampleApp::NodeInfoRemoveValue n $n(valueid)
         }
     } Type_ValueChanged {
         ## One of the node values has changed
         if {[set n [::ExampleApp::GetNodeInfo $notification]] != ""} {
-            ::ExampleApp::Log "Node Value for $n changed"
+            ::ExampleApp::Log "Node Value for $data changed"
         }
     } Type_Group {
         ## One of the node's association groups has changed
-        if {[set n [::ExampleApp::GetNodeInfo $notification]] != ""} {
-            ::ExampleApp::Log "Node assoc. groups for $n changed"
+        if {[set ni [::ExampleApp::GetNodeInfo n]] != ""} {
+            ::ExampleApp::Log "Node assoc. groups for $ni changed"
         }
     } Type_NodeAdded {
-        ::ExampleApp::AddNodeInfo \
-            [$notification cget -homeid] \
-            [$notification cget -nodeid] \
-            false \
-            {}
+        ::ExampleApp::AddNodeInfo $n(homeid) $n(nodeid) false {}
     } Type_NodeRemoved {
-        ::ExampleApp::RemoveNodeInfo $notification
+        ::ExampleApp::RemoveNodeInfo n
     } Type_NodeEvent {
         ## We have received an event from the node, caused by a
         ## basic_set or hail message.
         ::ExampleApp::Log \
             "Recvd event from node. caused by a basic_set or hail msg"
     } Type_PollingDisabled  {
-        ::ExampleApp::UpdateNodeInfo $notification -polled false
+        ::ExampleApp::UpdateNodeInfo n -polled false
     } Type_PollingEnabled {
-        ::ExampleApp::UpdateNodeInfo $notification -polled true
+        ::ExampleApp::UpdateNodeInfo n -polled true
     } Type_DriverReady {
-        set ::ExampleApp::HomeId [$notification cget -homeid]
+        set ::ExampleApp::HomeId $n(homeid)
         ::ExampleApp::Log "Driver Ready: home id = $::ExampleApp::HomeId" 
     } Type_DriverFailed {
         set ::ExampleApp::InitFailed true
@@ -201,16 +232,13 @@ proc ::ExampleApp::OnNotification {notification} {
       Type_NodeProtocolInfo - \
       Type_NodeQueriesComplete - \
       default {
-        ::ExampleApp::Log "$type: (no action for this event type)"
+        ::ExampleApp::Log "$typestring: (no action for this event type)"
     }
 }
 
 
 
-#
-# Create the driver and then wait
-#
-proc ::ExampleApp::Init {} {
+proc ::ExampleApp::Main {} {
 
 #       in the C++ version a mutex is used by the notifier thread
 #       to let the main thread know initialization has been deteceted 
@@ -251,7 +279,8 @@ proc ::ExampleApp::Init {} {
         ## the notifier thread sends notification messages via a socket to 
         ## the main thread (on the local 127.0.0.0 address) so one can write 
         ## a familiar tcl event driven program
-        ## without dealing with all kinds of thread nonsense.
+        ## without dealing with all kinds of thread drama
+        ##
         ## add watcher automatically creates the socket connection and then
         ## installs -command as the handler for incoming messages
         ## the server/recv portion of this message is created in 
@@ -280,13 +309,7 @@ proc ::ExampleApp::Init {} {
  	} else {
             ozw::manager adddriver $device
  	}
-        ::ExampleApp::Log "XXXX Init complete"
-}
- 
-proc ::ExampleApp::Main {} {
-        after 5000
-        ::ExampleApp::Log "XXXX Begin main"
-        vwait forever
+
         ##
 	## Now we just wait for either the AwakeNodesQueried or
 	## AllNodesQueried notification, then write out the config
@@ -301,10 +324,14 @@ proc ::ExampleApp::Main {} {
 	## writing the configuration file.  (Maybe write again after
 	## sleeping nodes have been queried as well.)
 
+        if {$::ExampleApp::Initialized == false} {
+            vwait ::ExampleApp::Initialized
+        }
+
  	if { $::ExampleApp::InitFailed } {
             ## ??
         } else {
-            ::ExampleApp::Log "??? Driver Ready: home id = $::ExampleApp::HomeId" 
+            ::ExampleApp::Log "Driver Ready: home id = $::ExampleApp::HomeId" 
             ::ozw::manager writeconfig $::ExampleApp::HomeId;
             ::ExampleApp::Log "wrote configuration. (initialization done)"
 
@@ -376,11 +403,7 @@ proc ::ExampleApp::Main {} {
  	#//pthread_mutex_destroy( &g_criticalSection );
 
         ::ozw::exit 0
- }
+}
 
-# place the main procedure inside the tcl event loop
-# so that vwait etc.. work in harmony with events occuring in notification 
-# thread
-::ExampleApp::Init
 ::ExampleApp::Main
 vwait forever

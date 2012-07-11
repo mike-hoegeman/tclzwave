@@ -253,14 +253,13 @@ static int OzwManagerMakeNotificationChannel(
         Tcl_DStringSetLength(&ds, 0);
 
         Tcl_DStringAppend(&ds, 
-        "proc ::ozw::notificationserveraccept {sock addr port} { \
+        "proc ::ozw::notificationacceptor {sock addr port} { \
          fconfigure $sock -buffering line; \
-         fileevent $sock readable [list ozw::nreader $sock]; \
-         puts stderr ZZZZZZZZZZZZZZZZZZZZZZZZZZ; \
+         fileevent $sock readable [list ozw::notificationreader $sock]; \
         }; ",
         -1);
         Tcl_DStringAppend(&ds, 
-        "socket -server ::ozw::notificationserveraccept -myaddr 127.0.0.1 0", -1);
+        "socket -server ::ozw::notificationacceptor -myaddr 127.0.0.1 0", -1);
         Tcl_DStringAppend(&ds, estr, -1);
         eval_result = Tcl_EvalEx(interp, Tcl_DStringValue(&ds), -1, TCL_EVAL_GLOBAL|TCL_EVAL_DIRECT);
         Tcl_DStringGetResult(interp, &ds);
