@@ -6,6 +6,26 @@ puts stderr "ozw package: [package require ozw]"
 namespace eval ::ExampleApp {}
 
 set ::ExampleApp::Initialized false
+set ::ExampleApp::InitFailed false
+
+proc ::ozw::nreader {sock} {
+        puts stderr "++++++ NREADER "
+        if {[eof $sock]} {
+            puts stderr "++++++ EOF. closing $sock"
+            close $sock
+            return
+        }
+        set data ""
+        puts stderr "++++++ GETS start"
+        set failed [catch {gets $sock data} err]
+        if $failed {
+            puts stderr "++++++ GETS ERR. closing $sock"
+            close $sock
+            return
+        }
+        puts stderr "++++++ GETS complete ---> $data"
+        puts stderr "----- DONE"
+}
 
 #typedef struct
 #{
@@ -166,7 +186,7 @@ proc ::ExampleApp::OnNotification {notification} {
         ::ExampleApp::UpdateNodeInfo $notification -polled true
     } Type_DriverReady {
         set ::ExampleApp::HomeId [$notification cget -homeid]
-        ::ExampleApp::Log "Driver Ready: home id = $ExampleApp::HomeId" 
+        ::ExampleApp::Log "Driver Ready: home id = $::ExampleApp::HomeId" 
     } Type_DriverFailed {
         set ::ExampleApp::InitFailed true
         set ::ExampleApp::Initialized true 
@@ -190,7 +210,7 @@ proc ::ExampleApp::OnNotification {notification} {
 #
 # Create the driver and then wait
 #
-proc ::ExampleApp::Main {} {
+proc ::ExampleApp::Init {} {
 
 #       in the C++ version a mutex is used by the notifier thread
 #       to let the main thread know initialization has been deteceted 
@@ -227,34 +247,52 @@ proc ::ExampleApp::Main {} {
  	ozw::manager create
  
  	## Add a callback handler to the manager.  
-        ## The second argument is a context that
+        ## for the notification callbacks. note that in this tcl library
+        ## the notifier thread sends notification messages via a socket to 
+        ## the main thread (on the local 127.0.0.0 address) so one can write 
+        ## a familiar tcl event driven program
+        ## without dealing with all kinds of thread nonsense.
+        ## add watcher automatically creates the socket connection and then
+        ## installs -command as the handler for incoming messages
+        ## the server/recv portion of this message is created in 
+        ## ozw::manager adddriver. the client/send socket is created at this
+        ## time also. the actual connect is deferred until the first C++ level
+        ## callback happens. the connect is then peformed to the recv side
+        ## and the notification is sent as a message to the recv side 
+        ## (main thread) which then executed the designated -command along 
+        ## with the notification message as a trailing argument.
+        ## the message is a {tag value ... tag value} list suitable for 
+        ## use as a tcl array via [array set $message]
  	::ozw::manager addwatcher -command ::ExampleApp::OnNotification
  
  	## Add a Z-Wave Driver
  	## Modify this line to set the correct serial port for your 
         ## PC interface.
 
- 	set port "/dev/cu.usbserial";
+ 	set device "/dev/cu.usbserial";
         ::ozw::log write LogLevel_Info "argv is $::argv"
  	if { $::argc > 0 } {
-            set port [lindex $::argv 0]
+            set device [lindex $::argv 0]
  	} 
         
-        if { $port == "usb"} {
+        if { $device == "usb"} {
             ## ozw::manager adddriver "HID Controller" Driver::ControllerInterface_Hid
  	} else {
-            ozw::manager adddriver $port
+            ozw::manager adddriver $device
  	}
+        ::ExampleApp::Log "XXXX Init complete"
+}
  
+proc ::ExampleApp::Main {} {
+        after 5000
+        ::ExampleApp::Log "XXXX Begin main"
+        vwait forever
         ##
 	## Now we just wait for either the AwakeNodesQueried or
 	## AllNodesQueried notification, then write out the config
 	## file.  In a normal app, we would be handling notifications
 	## and building a UI for the user.
         ##
-        ::ExampleApp::Log "!!! WAIT.."
-        vwait ::ExampleApp::Initialized
-        ::ExampleApp::Log "!!! ::ExampleApp::Initialized fired"
 
 	## Since the configuration file contains command class
 	## information that is only known after the nodes on the network
@@ -266,14 +304,14 @@ proc ::ExampleApp::Main {} {
  	if { $::ExampleApp::InitFailed } {
             ## ??
         } else {
- 
+            ::ExampleApp::Log "??? Driver Ready: home id = $::ExampleApp::HomeId" 
             ::ozw::manager writeconfig $::ExampleApp::HomeId;
             ::ExampleApp::Log "wrote configuration. (initialization done)"
 
             ## The section below demonstrates setting up polling for 
             ## a variable.  In this simple
             ## example, it has been hardwired to poll 
-            ## COMMAND_CLASS_BASIC on the each node that 
+
             ## supports this setting.
 
 #		pthread_mutex_lock( &g_criticalSection );
@@ -326,8 +364,8 @@ proc ::ExampleApp::Main {} {
         //Manager::Get()->RemoveDriver( "HID Controller" );
  	//} else {
  	//}
-        ::ozw::manager removedriver $port
- 	::ozw::manager removewatcher ::ExampleApp::OnNotification
+        ::ozw::manager removedriver $device
+ 	::ozw::manager removewatcher -command ::ExampleApp::OnNotification
  	::ozw::manager destroy
  	::ozw::options destroy
 
@@ -343,4 +381,6 @@ proc ::ExampleApp::Main {} {
 # place the main procedure inside the tcl event loop
 # so that vwait etc.. work in harmony with events occuring in notification 
 # thread
-after 0 ::ExampleApp::Main
+::ExampleApp::Init
+::ExampleApp::Main
+vwait forever

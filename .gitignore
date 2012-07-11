@@ -24,3 +24,9 @@ OZW_Log.txt
 zwcfg*.xml
 
 *.log
+
+# ignore ctags file
+tags
+
+# runtime data file written by library
+zwscene.xml

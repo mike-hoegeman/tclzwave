@@ -2,7 +2,11 @@
  *
  */
 #include "ozw.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <string>
+#include "errno.h"
 using namespace std;
 using namespace OpenZWave;
 
@@ -14,6 +18,8 @@ static void Ozw_NotificationInstDelProc(
     ckfree(clientData);
     return; 
 }
+
+#if 0
 static int Ozw_NotificationInstCmd(
     ClientData clientData, 
     Tcl_Interp *interp, 
@@ -90,7 +96,7 @@ static int Ozw_NotificationInstCmd(
              Notification::Type_DeleteButton==nt || 
              Notification::Type_ButtonOn==nt || 
              Notification::Type_ButtonOff==nt)
-        ) { 
+d        ) { 
             Tcl_SetObjResult(interp, 
                 Tcl_NewIntObj((int)ncd->notificationPtr->GetButtonId()));
             return TCL_OK;
@@ -122,55 +128,87 @@ static int Ozw_NotificationInstCmd(
 
     return TCL_OK;
 }
+#endif
 
-int Ozw_CreateNotificationInst(
-    Ozw_NotificationClientData *ncd
+
+/* callback employed by ozw::manager addwatcher -command {xxx} */
+/* which then in turn runs the tcl command {xxx} */
+void Ozw_Watcher (
+    OpenZWave::Notification const* _notification, 
+    void* _context
 ) {
-    char inst_name[200]; 
-    int eval_result = TCL_ERROR;
-    sprintf(inst_name, "::ozw::inst::notification%lx", 
-        Ozw_NotificationInstNo++); 
-    Tcl_Command command_token = Tcl_CreateObjCommand(
-        ncd->watcherContextPtr->interp, 
-        inst_name, 
-        Ozw_NotificationInstCmd,
-        (ClientData)ncd, 
-        Ozw_NotificationInstDelProc
-    );
-    {
-        Tcl_Interp *interp = ncd->watcherContextPtr->interp;
-        Tcl_DString ds;
-        Tcl_DStringInit(&ds);
-        Tcl_DStringAppend(
-            &ds, Tcl_DStringValue(&(ncd->watcherContextPtr->command)), -1
-        );
-        Tcl_DStringAppendElement(&ds, inst_name);
-        eval_result = Tcl_EvalEx(
-            interp,
-            Tcl_DStringValue(&ds), -1, 
-            TCL_EVAL_GLOBAL
-        );
-        Tcl_DStringGetResult(interp, &ds);
-        if (eval_result != TCL_OK) {
-            const char *ei = Tcl_GetVar(
-                interp, "::errorInfo", TCL_GLOBAL_ONLY);
-            fprintf(stderr, 
-                "Error running notification callback: %s\nErrorInfo:\n----\n%s\n----\n", 
-                Tcl_DStringValue(&ds),
-                ei == NULL ? "???" : ei
-            );
+
+#define RETURN {Tcl_DStringFree(&msg); return;}
+
+    OzwManagerClientData *mgrDataPtr = (OzwManagerClientData *) _context;
+    Tcl_DString msg;
+    Tcl_DStringInit(&msg);
+    char buf[100];
+    struct sockaddr_in serv_name;
+
+    if (mgrDataPtr->notificationSendSocket == -1) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            OpenZWave::Log::Write(OpenZWave::LogLevel_Fatal, "%s",
+              "socket: failed to make send portion of notification channel");
+            RETURN;
+        };
+        /* server address */ 
+        serv_name.sin_family = AF_INET;
+        inet_aton("127.0.0.1", &serv_name.sin_addr);
+        serv_name.sin_port = htons(mgrDataPtr->notificationSendPort);
+        /* connect to the server */
+        if (connect(sock,(struct sockaddr*)&serv_name, sizeof(serv_name))==-1) {
+            OpenZWave::Log::Write(OpenZWave::LogLevel_Fatal,
+              "connect:%s:failed to make send portion of notification channel",
+              strerror(errno));
+            RETURN;
         }
-        if (Tcl_DeleteCommandFromToken(
-            interp,
-            command_token) != TCL_OK) {
-            fprintf(stderr, "error deleting notification instance"); 
+
+        mgrDataPtr->notificationSendSocket = sock;
+        mgrDataPtr->notificationSendChannel = 
+            Tcl_MakeTcpClientChannel((void *)sock);
+
+        OpenZWave::Log::Write(OpenZWave::LogLevel_Info, "%s",
+            "creation of send side of notification channel complete");
+#if 0
+        if (Tcl_SetChannelOption((Tcl_Interp *)NULL, 
+            mgrDataPtr->notificationSendChannel,
+            optionName, 
+            newValue) 
+        != TCL_OK) {
+            OpenZWave::Log::Write(OpenZWave::LogLevel_Fatal, "%s",
+                "failed to make send (socket) portion of notification channel"
+            RETURN;
         }
-        Tcl_DStringFree(&ds);
+#endif
+        
     }
 
-    return TCL_OK;
-}
+    /* build the message */
+    Tcl_DStringAppendElement(&msg, "type");
+    snprintf(buf, 100, "%d", _notification->GetType());
+    Tcl_DStringAppendElement(&msg, buf);
 
+    Tcl_DStringAppendElement(&msg, "nodeid");
+    snprintf(buf, 100, "%d", _notification->GetNodeId());
+    Tcl_DStringAppendElement(&msg, buf);
+    Tcl_DStringAppend(&msg, "\n", -1);
+
+    int write_result = Tcl_Write(
+        mgrDataPtr->notificationSendChannel, 
+        Tcl_DStringValue(&msg),
+        Tcl_DStringLength(&msg)
+    );
+    Tcl_Flush(mgrDataPtr->notificationSendChannel);
+    OpenZWave::Log::Write(OpenZWave::LogLevel_Info,
+        "------ WRITE: %s completed with code %d", 
+            Tcl_DStringValue(&msg), write_result
+    );
+
+    RETURN;
+#undef RETURN
+}
 
 /* stilted, but i don't want to get into using maps or boost, etc.. */
 /* just going to make a tcl Array with the mappings */

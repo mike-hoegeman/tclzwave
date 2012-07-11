@@ -19,6 +19,7 @@ static int OzwVersionObjCmd(
 pthread_mutex_t Ozw_MainMutex;
 
 static int Ozw_Exit = 0;
+static int Ozw_RunEventsUnLocked = 0;
 static int OzwExitObjCmd(
     ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]
 ) {
@@ -26,12 +27,37 @@ static int OzwExitObjCmd(
     Tcl_SetObjResult(interp, Tcl_NewIntObj(0));
     return TCL_OK;
 }
+#if 0
 static void Ozw_TclMainLoop() {
     while (!Ozw_Exit) {
-        pthread_mutex_lock( &Ozw_MainMutex );
-        Tcl_DoOneEvent(0);
-        pthread_mutex_unlock( &Ozw_MainMutex );
+        if (Ozw_RunEventsUnLocked) {
+            Tcl_DoOneEvent(0);
+        } else {
+            pthread_mutex_lock( &Ozw_MainMutex );
+            Tcl_DoOneEvent(0);
+            pthread_mutex_unlock( &Ozw_MainMutex );
+        }
     }
+}
+#endif
+
+static int OzwUnlockObjCmd(
+    ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[]
+) {
+    if (objc != 2) {
+        Tcl_WrongNumArgs(interp, 1, objv, "command");
+        return TCL_ERROR;
+    }
+    const char *command = Tcl_GetString(objv[1]);
+        if (command == NULL) {
+        Tcl_SetObjResult(interp, 
+            Tcl_NewStringObj("error getting command", -1));
+        return TCL_ERROR;
+    }
+    Ozw_RunEventsUnLocked = 1;
+    const int eval_result = Tcl_EvalEx(interp, command, -1, 0);
+    Ozw_RunEventsUnLocked = 0;
+    return eval_result;
 }
 static void OzwVersionDeleteProc(ClientData clientData) {
     // convenient place to put the mutex cleanup;
@@ -66,7 +92,12 @@ DLLEXPORT int Ozw_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, 
         "::ozw::version", OzwVersionObjCmd, 
         (ClientData) &Ozw_MainMutex, OzwVersionDeleteProc);
+    Tcl_CreateObjCommand(interp, 
+        "::ozw::unlockevents", OzwUnlockObjCmd, 
+        (ClientData) &Ozw_MainMutex, NULL);
+#if  0
     Tcl_SetMainLoop(Ozw_TclMainLoop);
+#endif
 
     extern int Ozw_NotificationInitArrays(Tcl_Interp *interp);
     if (Ozw_NotificationInitArrays(interp) != TCL_OK) { return TCL_ERROR; }
@@ -91,3 +122,4 @@ static int OzwVersionObjCmd(
     Tcl_SetObjResult(interp, Tcl_NewStringObj("0.1", -1));
     return TCL_OK;
 }
+

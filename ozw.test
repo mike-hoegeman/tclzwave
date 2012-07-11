@@ -489,7 +489,7 @@ test manager-19 {
     legal manager adddriver call to add $DEVICE
 } -body {
         ozw::manager adddriver $DEVICE
-        after 10000
+        after 5000
 } -returnCodes ok -match glob -result \
 {}
 
