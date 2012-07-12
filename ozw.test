@@ -515,19 +515,10 @@ test manager-22 {
 {}
 
 test manager-23 {
-    there should be a ::ozw::inst namespace as a side effect of notification commands being made in the watcher callback
 } -body {
     lsort [namespace children ::ozw::]
 } -returnCodes ok -match glob -result \
-{::ozw::inst ::ozw::notification}
-
-test manager-24 {
-    there should be a ::ozw::inst namespace as a side effect of notification commands being made in the watcher callback BUT there should be no commands in it because they should auto delete once they have been run
-} -body {
-} -body {
-    llength [info commands ::ozw::inst::*]
-} -returnCodes ok -match glob -result \
-{0}
+{::ozw::notification}
 
 test log-99 {
         write - ok

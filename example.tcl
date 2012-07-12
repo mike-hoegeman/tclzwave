@@ -25,7 +25,7 @@ proc ::ozw::notificationacceptor {sock addr port} {
      fconfigure $sock -buffering line
      fileevent $sock readable [list ozw::notificationreader $sock]
 }
-set ::ozw::notificationreaderproc ::ExampleApp::HandleNotification
+
 set ::ozw::notificationreaderbuffer {}
 proc ::ozw::notificationreader {sock} {
     set nm reader; set lvl LogLevel_Info
@@ -174,16 +174,8 @@ proc ::ExampleApp::Log {msg} {
 proc ::ExampleApp::HandleNotification {tag data} {
     array set n $data
 
-
-    ## the tcl extension automatically puts a critical section 
-    ## wrapper/lock around this proc to avoid conflicts with the main thread
-    ## it does this w/ a pthread_mutex_(un)lock( &OZW_MainMutex );
-    ## likewise, the main loop in owzsh runs each event it processes in a 
-    ## pthread_mutex_(un)lock( &OZW_MainMutex ); wrapping
-
     set typestring $n(type)
-
-    ::ExampleApp::Log " **** OnNotification.. ==> $typestring"
+    ::ExampleApp::Log " @@ NotificationHandler ==> $typestring"
     switch -exact -- $typestring Type_ValueAdded {
         if {[::ExampleApp::GetNodeInfo $notification] != ""} {
             ::ExampleApp::NodeInfoAddValue n $n(valueid)
@@ -235,8 +227,6 @@ proc ::ExampleApp::HandleNotification {tag data} {
         ::ExampleApp::Log "$typestring: (no action for this event type)"
     }
 }
-
-
 
 proc ::ExampleApp::Main {} {
 
@@ -292,8 +282,7 @@ proc ::ExampleApp::Main {} {
         ## with the notification message as a trailing argument.
         ## the message is a {tag value ... tag value} list suitable for 
         ## use as a tcl array via [array set $message]
- 	::ozw::manager addwatcher -command ::ExampleApp::OnNotification
- 
+ 	::ozw::manager addwatcher -command ::ExampleApp::HandleNotification 
  	## Add a Z-Wave Driver
  	## Modify this line to set the correct serial port for your 
         ## PC interface.
@@ -392,7 +381,7 @@ proc ::ExampleApp::Main {} {
  	//} else {
  	//}
         ::ozw::manager removedriver $device
- 	::ozw::manager removewatcher -command ::ExampleApp::OnNotification
+ 	::ozw::manager removewatcher -command ::ExampleApp::HandleNotification 
  	::ozw::manager destroy
  	::ozw::options destroy
 
@@ -401,8 +390,6 @@ proc ::ExampleApp::Main {} {
         # to the tcl extension and is destroyed when the 
         # extension commands are destroyed in the tcl interpreter
  	#//pthread_mutex_destroy( &g_criticalSection );
-
-        ::ozw::exit 0
 }
 
 ::ExampleApp::Main

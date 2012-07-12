@@ -23,7 +23,7 @@ static int OzwManagerObjCmd(
     const char *subcommand = NULL;
     if (objc < 2) {
         Tcl_WrongNumArgs(interp, 1, objv, 
-            "create|destroy|addwatcher ?arg ...?");
+            "create|destroy|addwatcher|removewatcher ?arg ...?");
         return TCL_ERROR;
     }
     subcommand = Tcl_GetString(objv[1]);
@@ -120,6 +120,8 @@ static int OzwManagerObjCmd(
             Tcl_AppendResult(interp, "Cannot find manager element", NULL);
             return TCL_ERROR;
         }
+        Tcl_DStringAppend(&(The_OzwManagerClientData.notificationRecvCommand),
+            command, -1);
         if (OzwManagerMakeNotificationChannel(interp, mgrDataPtr)!=TCL_OK) {
             Tcl_AppendResult(interp, 
                 " ( while trying to make tcl notification channel )", 
@@ -150,7 +152,6 @@ static int OzwManagerObjCmd(
                 &(The_OzwManagerClientData.notificationRecvChanName), 0);
             Tcl_Close((Tcl_Interp *)NULL, 
                 The_OzwManagerClientData.notificationSendChannel);
-            /*close(The_OzwManagerClientData.notificationSendSocket); */
             The_OzwManagerClientData.notificationSendSocket = -1;
         }
 
@@ -230,82 +231,78 @@ static int OzwManagerMakeNotificationChannel(
 ) {
 #define RETURN(x) {Tcl_DStringFree(&ds); return(x);}
 
-#if 0
-    /* 49152-65535 is the RFC sanctioned ephemeral port range 
-     * we start 100 from the bottom just to avoid clashes 
-     * with bottom feeders 
-     */
-    unsigned int start_e 49152+100;
-    unsigned int end_e 65535;
-    /*
-     */
- #endif
-    int start_e = 0;/* tells tcl have to have the os assign the port */
-    int end_e = 0;
-    int e;
 
     int eval_result = TCL_ERROR;
     Tcl_DString ds;
     Tcl_DStringInit(&ds);
-    for (e = start_e; e <= end_e; e++) {
-        char estr[200];
-        snprintf(estr, 200, "%d", e);
-        Tcl_DStringSetLength(&ds, 0);
-
-        Tcl_DStringAppend(&ds, 
+    Tcl_DStringAppend(&ds, 
         "proc ::ozw::notificationacceptor {sock addr port} { \
          fconfigure $sock -buffering line; \
          fileevent $sock readable [list ozw::notificationreader $sock]; \
         }; ",
         -1);
+
+    if (Tcl_SetVar2(interp, 
+        "::ozw::notificationreaderproc", NULL, 
+        Tcl_DStringValue(&mgrDataPtr->notificationRecvCommand), 
+        TCL_GLOBAL_ONLY) == NULL
+    ) {
+        return eval_result;
+    }
+
+    /* port of 0 tells tcl have to have the os assign the port */
+    Tcl_DStringAppend(&ds, 
+        "socket -server ::ozw::notificationacceptor -myaddr 127.0.0.1 0", 
+        -1);
+    eval_result = Tcl_EvalEx(interp, 
+        Tcl_DStringValue(&ds), -1, TCL_EVAL_GLOBAL|TCL_EVAL_DIRECT);
+    Tcl_DStringGetResult(interp, &ds);
+    if (eval_result == TCL_OK) {
+        OpenZWave::Log::Write(OpenZWave::LogLevel_Info, 
+            "notification server '%s' completed", Tcl_DStringValue(&ds));
+
+        Tcl_DStringSetLength(&(mgrDataPtr->notificationRecvChanName), 0);
+        Tcl_DStringAppend(&(mgrDataPtr->notificationRecvChanName), 
+            Tcl_DStringValue(&ds), -1);
+        Tcl_DStringSetLength(&ds, 0);
+        Tcl_DStringAppend(&ds, "chan configure ", -1);
         Tcl_DStringAppend(&ds, 
-        "socket -server ::ozw::notificationacceptor -myaddr 127.0.0.1 0", -1);
-        Tcl_DStringAppend(&ds, estr, -1);
-        eval_result = Tcl_EvalEx(interp, Tcl_DStringValue(&ds), -1, TCL_EVAL_GLOBAL|TCL_EVAL_DIRECT);
+            Tcl_DStringValue( &(mgrDataPtr->notificationRecvChanName)), -1);
+        Tcl_DStringAppend(&ds,  " -sockname ", -1);
+        eval_result = Tcl_EvalEx(interp, 
+            Tcl_DStringValue(&ds), -1, TCL_EVAL_GLOBAL|TCL_EVAL_DIRECT);
         Tcl_DStringGetResult(interp, &ds);
-        if (eval_result == TCL_OK) {
-            OpenZWave::Log::Write(OpenZWave::LogLevel_Info, "notification server '%s' completed", Tcl_DStringValue(&ds));
-
-            Tcl_DStringSetLength(&(mgrDataPtr->notificationRecvChanName), 0);
-            Tcl_DStringAppend(&(mgrDataPtr->notificationRecvChanName), Tcl_DStringValue(&ds), -1);
-            Tcl_DStringSetLength(&ds, 0);
-            Tcl_DStringAppend(&ds, "chan configure ", -1);
-            Tcl_DStringAppend(&ds, Tcl_DStringValue( &(mgrDataPtr->notificationRecvChanName)), -1);
-            Tcl_DStringAppend(&ds,  " -sockname ", -1);
-            eval_result = Tcl_EvalEx(interp, Tcl_DStringValue(&ds), -1, TCL_EVAL_GLOBAL|TCL_EVAL_DIRECT);
-            Tcl_DStringGetResult(interp, &ds);
-            if (eval_result == TCL_ERROR) {
-                return eval_result;
-            }
-
-            {
-                int port_number;
-                int split_c;
-                int status;
-                const char ** split_v;
-                status = Tcl_SplitList(
-                    interp, Tcl_DStringValue(&ds),
-                    &split_c, &split_v
-                );
-                if (status != TCL_OK || split_c < 3) {
-                    Tcl_DStringFree(&ds);
-                    RETURN(TCL_ERROR);
-                }
-                port_number = atoi(split_v[2]);
-                Tcl_Free((char *)split_v);
-                if (port_number < 0) {
-                    Tcl_AppendResult(interp, "bad port number in ", Tcl_DStringValue(&ds), NULL);
-                    Tcl_DStringFree(&ds);
-                    RETURN(TCL_ERROR);
-                }
-                mgrDataPtr->notificationSendPort = port_number;
-            }
-            break;
-
-        } else {
-            OpenZWave::Log::Write(OpenZWave::LogLevel_Info, 
-             "notification server '%s' unsuccessful", Tcl_DStringValue(&ds));
+        if (eval_result != TCL_OK) {
+            return eval_result;
         }
+
+        {
+            int port_number;
+            int split_c;
+            int status;
+            const char ** split_v;
+            status = Tcl_SplitList(
+                interp, Tcl_DStringValue(&ds),
+                &split_c, &split_v
+            );
+            if (status != TCL_OK || split_c < 3) {
+                Tcl_DStringFree(&ds);
+                RETURN(TCL_ERROR);
+            }
+            port_number = atoi(split_v[2]);
+            Tcl_Free((char *)split_v);
+            if (port_number < 0) {
+                Tcl_AppendResult(interp, "bad port number in ", 
+                    Tcl_DStringValue(&ds), NULL);
+                Tcl_DStringFree(&ds);
+                RETURN(TCL_ERROR);
+            }
+            mgrDataPtr->notificationSendPort = port_number;
+        }
+
+    } else {
+        OpenZWave::Log::Write(OpenZWave::LogLevel_Info, 
+         "notification server '%s' unsuccessful", Tcl_DStringValue(&ds));
     }
 
     RETURN(eval_result);
@@ -313,7 +310,6 @@ static int OzwManagerMakeNotificationChannel(
 }
 
 int OzwManager_Init(Tcl_Interp *interp) {
-    
     /* init The_OzwManagerClientData */
     {
         The_OzwManagerClientData.notificationSendSocket = -1;
@@ -322,7 +318,6 @@ int OzwManager_Init(Tcl_Interp *interp) {
         Tcl_DStringInit(&(The_OzwManagerClientData.notificationRecvCommand));
         The_OzwManagerClientData.notificationSendSocket = -1;
     }
-
     Tcl_CreateObjCommand(interp, 
         "::ozw::manager", OzwManagerObjCmd, 
         (ClientData) &The_OzwManagerClientData, NULL);
