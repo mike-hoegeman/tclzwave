@@ -63,14 +63,6 @@ proc ::ozw::notificationreader {sock} {
     }
 }
 
-#typedef struct
-#{
-#	uint32			m_homeId;
-#	uint8			m_nodeId;
-#	bool			m_polled;
-#	list<ValueID>	m_values;
-#}NodeInfo;
-#
 proc ::ExampleApp::AddNodeInfo {homeid nodeid polled values} {
     set key $homeid.$nodeid
     set ::ExampleApp::Nodes($key) [list \
@@ -237,7 +229,6 @@ proc ::ExampleApp::Main {} {
 #       in tcl we just set a tcl variable in the notifier callback ad use 
 #       the tcl event system to wait for the variable to change via a tcl 
 #       waitvar call in this main proc / thread (see the waitvar call below)
-#       // pthread_mutex_lock( &initMutex );
 #
  	## Create the OpenZWave Manager.
  	## The first argument is the path to the config files 
@@ -246,11 +237,12 @@ proc ::ExampleApp::Main {} {
         ## and the log file.  If you leave it NULL 
  	## the log file will appear in the program's working directory.
 
+        set cpath [lindex [glob ../../open*zwave*/config] 0]
+        set cpath ./config
  	ozw::options create \
-            -configurationpath "../../../../config/" \
+            -configurationpath $cpath \
             -userpath "./" \
             -commandline ""
-
  	ozw::options addoptionint "SaveLogLevel" \
             [::ozw::log levelcode LogLevel_Detail]
  	ozw::options addoptionint "QueueLogLevel" \
@@ -264,24 +256,29 @@ proc ::ExampleApp::Main {} {
  
  	ozw::manager create
  
- 	## Add a callback handler to the manager.  
-        ## for the notification callbacks. note that in this tcl library
-        ## the notifier thread sends notification messages via a socket to 
-        ## the main thread (on the local 127.0.0.0 address) so one can write 
-        ## a familiar tcl event driven program
-        ## without dealing with all kinds of thread drama
+	## Add a callback handler to the manager. the tcl
+	## extension, via the underlying C++ notifier thread, sends
+	## notification messages via a socket to the main thread
+	## (on the local 127.0.0.0 address) so one can write a
+	## familiar tcl event driven program without dealing with
+	## all kinds of thread drama
+
+	## add watcher automatically creates the socket connection
+	## on the recv side and then installs -command as the handler
+	## for incoming messages the server/recv portion of this message
+	## is created in ozw::manager adddriver.  the sender socket
+	## creation and connection is deferred until the first C++
+	## level callback happens. the connect peformed to the recv
+	## side and subsequent notification are sent as messages to
+	## the recv side (main thread) which then executed the designated
+	## -command along the notification message as an argument.
+        ## the messages are a block of the forn
         ##
-        ## add watcher automatically creates the socket connection and then
-        ## installs -command as the handler for incoming messages
-        ## the server/recv portion of this message is created in 
-        ## ozw::manager adddriver. the client/send socket is created at this
-        ## time also. the actual connect is deferred until the first C++ level
-        ## callback happens. the connect is then peformed to the recv side
-        ## and the notification is sent as a message to the recv side 
-        ## (main thread) which then executed the designated -command along 
-        ## with the notification message as a trailing argument.
-        ## the message is a {tag value ... tag value} list suitable for 
+        ##      notification {tag value ... tag value} list suitable for 
+        ##
         ## use as a tcl array via [array set $message]
+
+
  	::ozw::manager addwatcher -command ::ExampleApp::HandleNotification 
  	## Add a Z-Wave Driver
  	## Modify this line to set the correct serial port for your 
@@ -294,7 +291,8 @@ proc ::ExampleApp::Main {} {
  	} 
         
         if { $device == "usb"} {
-            ## ozw::manager adddriver "HID Controller" Driver::ControllerInterface_Hid
+            ## ozw::manager adddriver \
+            ## "HID Controller" Driver::ControllerInterface_Hid
  	} else {
             ozw::manager adddriver $device
  	}
@@ -330,67 +328,55 @@ proc ::ExampleApp::Main {} {
 
             ## supports this setting.
 
-#		pthread_mutex_lock( &g_criticalSection );
-#		for( list<NodeInfo*>::iterator it = g_nodes.begin(); it != g_nodes.end(); ++it )
-#		{
-#			NodeInfo* nodeInfo = *it;
-#
-#			// skip the controller (most likely node 1)
-#			if( nodeInfo->m_nodeId == 1) continue;
-#
-#			for( list<ValueID>::iterator it2 = nodeInfo->m_values.begin(); it2 != nodeInfo->m_values.end(); ++it2 )
-#			{
-#				ValueID v = *it2;
-#				if( v.GetCommandClassId() == 0x20 )
-#				{
-#					Manager::Get()->EnablePoll( v, 2 );		// enables polling with "intensity" of 2, though this is irrelevant with only one value polled
-#					break;
-#				}
-#			}
-#		}
-#		pthread_mutex_unlock( &g_criticalSection );
-#
-#		// If we want to access our NodeInfo list, that has been built from all the
-#		// notification callbacks we received from the library, we have to do so
-#		// from inside a Critical Section.  This is because the callbacks occur on other 
-#		// threads, and we cannot risk the list being changed while we are using it.  
-#		// We must hold the critical section for as short a time as possible, to avoid
-#		// stalling the OpenZWave drivers.
-#		// At this point, the program just waits for 3 minutes (to demonstrate polling),
-#		// then exits
-#		for( int i = 0; i < 60*3; i++ )
-#		{
-#			pthread_mutex_lock( &g_criticalSection );
-#			// but NodeInfo list and similar data should be inside critical section
-#			pthread_mutex_unlock( &g_criticalSection );
-#			sleep(1);
-#		}
-#
-#		Driver::DriverData data;
-#		Manager::Get()->GetDriverStatistics( g_homeId, &data );
-#		printf("SOF: %d ACK Waiting: %d Read Aborts: %d Bad Checksums: %d\n", data.s_SOFCnt, data.s_ACKWaiting, data.s_readAborts, data.s_badChecksum);
-#		printf("Reads: %d Writes: %d CAN: %d NAK: %d ACK: %d Out of Frame: %d\n", data.s_readCnt, data.s_writeCnt, data.s_CANCnt, data.s_NAKCnt, data.s_ACKCnt, data.s_OOFCnt);
-#		printf("Dropped: %d Retries: %d\n", data.s_dropped, data.s_retries);
-#	}
+                ## pthread_mutex_lock( &g_criticalSection );
 
-        vwait forever
+                array set nodeInfo {}
+                foreach {key data} [array get ::ExampleApp::Nodes] {
+                    puts stderr >>>>$data
+                    unset nodeInfo; array set nodeInfo $data
 
- 	// program exit (clean up)
- 	//if( strcasecmp( port.c_str(), "usb") == 0 ) {
-        //Manager::Get()->RemoveDriver( "HID Controller" );
- 	//} else {
- 	//}
+                    ## skip the controller (most likely node 1)
+                    if { $nodeInfo(-nodeid) == 1} {
+                        continue
+                    }
+ 
+                    foreach {v} $nodeInfo(-values) {
+                        if { $v(commandclassid) == 0x20 } {
+                            ##
+                            ## Manager::Get()->EnablePoll( v, 2 );		// enables polling with "intensity" of 2, though this is irrelevant with only one value polled
+                            ##
+                            ## break;
+                            ##
+                        }
+                    }
+ 		}
+
+ 		## At this point, the program just waits for 
+                ## 3 minutes (to demonstrate polling), then exits
+
+ 		for {set i 0} {$i < 1*3} {incr i} {
+                    ##
+                    ##
+                    after 1000; # sleep a sec
+ 		}
+        }
+
+ 
+if {0} {
+ 		Driver::DriverData data;
+ 		Manager::Get()->GetDriverStatistics( g_homeId, &data );
+ 		printf("SOF: %d ACK Waiting: %d Read Aborts: %d Bad Checksums: %d\n", data.s_SOFCnt, data.s_ACKWaiting, data.s_readAborts, data.s_badChecksum);
+ 		printf("Reads: %d Writes: %d CAN: %d NAK: %d ACK: %d Out of Frame: %d\n", data.s_readCnt, data.s_writeCnt, data.s_CANCnt, data.s_NAKCnt, data.s_ACKCnt, data.s_OOFCnt);
+ 		printf("Dropped: %d Retries: %d\n", data.s_dropped, data.s_retries);
+
+
+}
+
+ 	## program exit (clean up)
         ::ozw::manager removedriver $device
  	::ozw::manager removewatcher -command ::ExampleApp::HandleNotification 
  	::ozw::manager destroy
  	::ozw::options destroy
-
-        # in tcl , the global mutex Ozw_MainMutex similar to 
-        # g_criticalSection in the C++ example app it is internal 
-        # to the tcl extension and is destroyed when the 
-        # extension commands are destroyed in the tcl interpreter
- 	#//pthread_mutex_destroy( &g_criticalSection );
 }
 
 ::ExampleApp::Main
-vwait forever

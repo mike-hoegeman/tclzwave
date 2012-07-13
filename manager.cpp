@@ -150,8 +150,12 @@ static int OzwManagerObjCmd(
                 &(The_OzwManagerClientData.notificationRecvCommand), 0);
             Tcl_DStringSetLength(
                 &(The_OzwManagerClientData.notificationRecvChanName), 0);
+            /*
             Tcl_Close((Tcl_Interp *)NULL, 
                 The_OzwManagerClientData.notificationSendChannel);
+            */
+            close(The_OzwManagerClientData.notificationSendSocket);
+            The_OzwManagerClientData.notificationSendChannel = NULL;
             The_OzwManagerClientData.notificationSendSocket = -1;
         }
 

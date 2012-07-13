@@ -159,6 +159,12 @@ Ozw_NotificationBuildMsg(
 
     /* valueid to be done */
 
+    Tcl_DStringAppendElement(msgPtr, "valueid");
+    snprintf(buf, sizeof(buf), "%llu", 
+        _notification->GetValueID().GetId());
+    Tcl_DStringAppendElement(msgPtr, buf);
+
+
     if (Notification::Type_Group == nt) {
         Tcl_DStringAppendElement(msgPtr, "groupidx");
         snprintf(buf, sizeof(buf), "%d", _notification->GetGroupIdx());
@@ -256,16 +262,18 @@ void Ozw_Watcher (
         RETURN;
     }
 
-    int write_result = Tcl_Write(
-        mgrDataPtr->notificationSendChannel, 
-        Tcl_DStringValue(&msg),
-        Tcl_DStringLength(&msg)
-    );
-    Tcl_Flush(mgrDataPtr->notificationSendChannel);
-    OpenZWave::Log::Write(OpenZWave::LogLevel_Info,
-        "------ WRITE: %s completed with code %d", 
-            Tcl_DStringValue(&msg), write_result
-    );
+    if (mgrDataPtr->notificationSendChannel != NULL) {
+        int write_result = Tcl_Write(
+            mgrDataPtr->notificationSendChannel, 
+            Tcl_DStringValue(&msg),
+            Tcl_DStringLength(&msg)
+        );
+        Tcl_Flush(mgrDataPtr->notificationSendChannel);
+        OpenZWave::Log::Write(OpenZWave::LogLevel_Info,
+            "------ WRITE: %s completed with code %d", 
+                Tcl_DStringValue(&msg), write_result
+        );
+    }
 
     RETURN;
 #undef RETURN
