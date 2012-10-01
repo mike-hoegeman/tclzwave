@@ -238,7 +238,10 @@ proc ::ExampleApp::Main {} {
  	## the log file will appear in the program's working directory.
 
         set cpath [lindex [glob ../../open*zwave*/config] 0]
-        set cpath ./config
+        puts stderr [exec ls -l $cpath]
+        if {![file exists $cpath]} {
+                puts stderr "path <$cpath> does not exist"
+        }
  	ozw::options create \
             -configurationpath $cpath \
             -userpath "./" \
